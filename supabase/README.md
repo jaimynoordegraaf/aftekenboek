@@ -35,6 +35,8 @@ project dat al bestaat:
                               kwijtraken
     012-onderdelen.sql        eisen kunnen losse onderdelen hebben (knopen,
                               commando's, termen)
+    013-beheer.sql            iemand uit de groep halen, en de catalogus
+                              bewerkbaar voor beheerders
 
 `010-eisen.sql` draait **als laatste**, ook al is zijn nummer lager. De catalogus
 hangt aan elke schemawijziging die erna genummerd is, dus hij wordt steeds

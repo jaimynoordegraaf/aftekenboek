@@ -273,6 +273,22 @@ export async function setMemberRole(
   if (error) throw error;
 }
 
+/**
+ * Iemand uit de groep halen. Zijn aftekeningen blijven staan — meldt hij zich
+ * later weer aan met een code, dan staat zijn vorderingenstaat er weer precies
+ * zoals hij hem achterliet.
+ *
+ * Gaat via een functie en niet via een delete, zodat de controle op de laatste
+ * beheerder er niet omheen kan.
+ */
+export async function removeMember(groupId: string, profileId: string): Promise<void> {
+  const { error } = await db().rpc('remove_member', {
+    p_group: groupId,
+    p_profile: profileId,
+  });
+  if (error) throw error;
+}
+
 export async function fetchInvites(groupId: string): Promise<Invite[]> {
   const { data, error } = await db()
     .from('invites')

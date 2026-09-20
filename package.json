@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test:db": "node supabase/test/policies.mjs",
     "export:android": "expo export --platform android",
-    "export:ios": "expo export --platform ios"
+    "export:ios": "expo export --platform ios",
+    "admin": "node admin/serve.mjs"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

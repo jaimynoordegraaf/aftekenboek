@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aftekenboek — beheer</title>
+<style>
+  :root {
+    --bg: #f4f5f3; --card: #fff; --border: #e1e3df; --text: #161a17;
+    --dim: #5a605b; --accent: #14445f; --on-accent: #fff; --good: #1b6b3a;
+    --warn: #8a5a00; --danger: #b3261e; --chip: #ebede9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101210; --card: #1b1e1c; --border: #2c302d; --text: #f1f3f0;
+      --dim: #9ba29d; --accent: #7fb2cf; --on-accent: #101210; --good: #6fd397;
+      --warn: #e0b252; --danger: #f2b8b5; --chip: #262a27;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding: 16px 24px; border-bottom: 1px solid var(--border); background: var(--card);
+    position: sticky; top: 0; z-index: 5;
+  }
+  header h1 { font-size: 17px; margin: 0; }
+  header .who { color: var(--dim); font-size: 13px; margin-left: auto; }
+  nav { display: flex; gap: 4px; flex-wrap: wrap; }
+  nav button {
+    background: none; border: 0; color: var(--dim); padding: 8px 12px;
+    border-radius: 8px; cursor: pointer; font: inherit; font-weight: 600;
+  }
+  nav button[aria-current="true"] { background: var(--chip); color: var(--text); }
+  main { padding: 24px; max-width: 1000px; margin: 0 auto; }
+  h2 { font-size: 20px; margin: 0 0 4px; }
+  h3 { font-size: 15px; margin: 24px 0 8px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 16px; margin-bottom: 12px;
+  }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .spread { justify-content: space-between; }
+  .grow { flex: 1; min-width: 180px; }
+  label { display: block; font-size: 12px; font-weight: 600; color: var(--dim); margin-bottom: 4px; }
+  input, select, textarea {
+    width: 100%; padding: 9px 10px; border: 1px solid var(--border); border-radius: 9px;
+    background: var(--bg); color: var(--text); font: inherit;
+  }
+  textarea { min-height: 72px; resize: vertical; }
+  button.btn {
+    padding: 9px 14px; border-radius: 9px; border: 1px solid var(--accent);
+    background: var(--accent); color: var(--on-accent); font: inherit;
+    font-weight: 600; cursor: pointer;
+  }
+  button.ghost { background: none; border-color: var(--border); color: var(--text); }
+  button.danger { background: none; border-color: var(--border); color: var(--danger); }
+  button:disabled { opacity: .5; cursor: default; }
+  .dim { color: var(--dim); font-size: 13px; }
+  .chip {
+    display: inline-block; background: var(--chip); color: var(--dim);
+    border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600;
+  }
+  .note {
+    border-left: 3px solid var(--warn); background: var(--card);
+    padding: 12px 14px; border-radius: 0 10px 10px 0; margin-bottom: 16px; font-size: 13px;
+  }
+  .err { border-left-color: var(--danger); color: var(--danger); }
+  .ok { border-left-color: var(--good); color: var(--good); }
+  details { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px; }
+  details summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--accent); }
+  .part { display: flex; gap: 8px; align-items: center; margin: 6px 0 0 16px; }
+  .part input { flex: 1; }
+  .num { width: 62px; flex: none; }
+  #signin { max-width: 380px; margin: 12vh auto; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div id="signin">
+  <div class="card">
+    <h2>Aftekenboek</h2>
+    <p class="dim">Beheerpagina. Log in met je beheerdersaccount.</p>
+    <div style="margin-top:12px"><label for="email">E-mailadres</label>
+      <input id="email" type="email" autocomplete="username"></div>
+    <div style="margin-top:12px"><label for="password">Wachtwoord</label>
+      <input id="password" type="password" autocomplete="current-password"></div>
+    <div id="signin-error" class="note err hidden" style="margin-top:12px"></div>
+    <button class="btn" id="signin-btn" style="margin-top:16px; width:100%">Inloggen</button>
+  </div>
+</div>
+
+<div id="app" class="hidden">
+  <header>
+    <h1>Aftekenboek — beheer</h1>
+    <nav>
+      <button data-tab="leden" aria-current="true">Leden</button>
+      <button data-tab="codes">Codes</button>
+      <button data-tab="speltakken">Speltakken</button>
+      <button data-tab="catalogus">Diploma's en eisen</button>
+    </nav>
+    <span class="who" id="who"></span>
+    <button class="btn ghost" id="signout">Uitloggen</button>
+  </header>
+  <!-- Buiten #view, want dat wordt bij elke render leeggegooid en dan zou een
+       "Opgeslagen" verdwijnen op het moment dat je hem nodig hebt. -->
+  <div style="max-width:1000px; margin:16px auto 0; padding:0 24px">
+    <div id="say" class="note hidden"></div>
+  </div>
+  <main id="view"></main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="/config.js"></script>
+<script>
+/*
+ * De beheerpagina.
+ *
+ * Vanilla JS met opzet: dit is één bestand dat je opent en dat het doet, zonder
+ * build en zonder node_modules. De regels over wie wat mag staan niet hier maar
+ * in de database — deze pagina praat met precies dezelfde policies als de app,
+ * met de publishable key. Wie geen beheerder is, krijgt hier dus ook niets voor
+ * elkaar, hoe hard hij ook op de knoppen drukt.
+ */
+
+const cfg = window.AFTEKENBOEK ?? { url: '', key: '' };
+const db = cfg.url && cfg.key ? window.supabase.createClient(cfg.url, cfg.key) : null;
+
+let me = null;       // { id, name, email }
+let group = null;    // { id, name } — de groep waar je beheerder van bent
+let tab = 'leden';
+
+// ---------------------------------------------------------------- helpers
+
+/**
+ * Supabase gooit geen Error maar een gewoon object, dus String() erop geeft
+ * "[object Object]". Zelfde reden als in de app: kijk naar de vorm.
+ */
+function message(e) {
+  if (!e) return '';
+  if (typeof e === 'string') return e;
+  if (e instanceof Error && e.message) return e.message;
+  const parts = [e.message, e.details, e.hint].filter((p) => typeof p === 'string' && p.trim());
+  if (parts.length) return parts.join(' — ');
+  try { return JSON.stringify(e); } catch { return 'Onbekende fout'; }
+}
+
+function el(tag, props, ...kids) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(props ?? {})) {
+    if (k === 'class') node.className = v;
+    else if (k === 'html') node.innerHTML = v;
+    else if (k.startsWith('on')) node.addEventListener(k.slice(2), v);
+    else if (v !== null && v !== undefined && v !== false) node.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) {
+    if (kid === null || kid === undefined || kid === false) continue;
+    node.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  }
+  return node;
+}
+
+function field(label, value, attrs = {}) {
+  const input = el(attrs.multiline ? 'textarea' : 'input', {
+    value: attrs.multiline ? null : (value ?? ''),
+    type: attrs.type ?? 'text',
+    class: attrs.class ?? null,
+  });
+  if (attrs.multiline) input.value = value ?? '';
+  return { wrap: el('div', { class: attrs.wrapClass ?? 'grow' }, el('label', {}, label), input), input };
+}
+
+let noteTimer = null;
+function say(text, kind = 'ok') {
+  const bar = document.getElementById('say');
+  bar.className = `note ${kind}`;
+  bar.textContent = text;
+  bar.classList.remove('hidden');
+  clearTimeout(noteTimer);
+  if (kind === 'ok') noteTimer = setTimeout(() => bar.classList.add('hidden'), 3000);
+}
+
+async function run(fn, okText) {
+  try {
+    const out = await fn();
+    if (okText) say(okText, 'ok');
+    return out;
+  } catch (e) {
+    say(message(e), 'err');
+    throw e;
+  }
+}
+
+function check(res) {
+  if (res.error) throw res.error;
+  return res.data;
+}
+
+function confirmed(text) {
+  return window.confirm(text);
+}
+
+// ---------------------------------------------------------------- inloggen
+
+document.getElementById('signin-btn').addEventListener('click', async () => {
+  const box = document.getElementById('signin-error');
+  box.classList.add('hidden');
+  if (!db) {
+    box.textContent = 'Geen verbinding ingesteld. Draai deze pagina via "npm run admin", dan leest hij de .env van het project.';
+    box.classList.remove('hidden');
+    return;
+  }
+  const { error } = await db.auth.signInWithPassword({
+    email: document.getElementById('email').value.trim(),
+    password: document.getElementById('password').value,
+  });
+  if (error) {
+    box.textContent = message(error);
+    box.classList.remove('hidden');
+    return;
+  }
+  await start();
+});
+
+document.getElementById('signout').addEventListener('click', async () => {
+  await db.auth.signOut();
+  location.reload();
+});
+
+for (const btn of document.querySelectorAll('nav button')) {
+  btn.addEventListener('click', () => {
+    tab = btn.dataset.tab;
+    for (const b of document.querySelectorAll('nav button')) {
+      b.setAttribute('aria-current', String(b === btn));
+    }
+    render();
+  });
+}
+
+async function start() {
+  const { data: { user } } = await db.auth.getUser();
+  if (!user) return;
+
+  const profile = check(
+    await db.from('profiles').select('id, full_name').eq('id', user.id).maybeSingle(),
+  );
+  me = { id: user.id, name: profile?.full_name ?? '', email: user.email };
+
+  const rows = check(
+    await db
+      .from('memberships')
+      .select('group_id, role, groups(id, name)')
+      .eq('profile_id', user.id),
+  );
+  const admin = rows.find((r) => r.role === 'beheerder');
+  if (!admin) {
+    document.getElementById('signin').innerHTML =
+      '<div class="card"><h2>Geen beheerder</h2><p class="dim">Dit account is geen beheerder van een groep. Vraag een beheerder om je die rol te geven, of gebruik de app.</p></div>';
+    return;
+  }
+  group = { id: admin.groups.id, name: admin.groups.name };
+
+  document.getElementById('signin').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  document.getElementById('who').textContent = `${me.name || me.email} · ${group.name}`;
+  render();
+}
+
+// ---------------------------------------------------------------- schermen
+
+function render() {
+  const view = document.getElementById('view');
+  view.innerHTML = '';
+  if (tab === 'leden') renderLeden(view);
+  else if (tab === 'codes') renderCodes(view);
+  else if (tab === 'speltakken') renderSpeltakken(view);
+  else renderCatalogus(view);
+}
+
+// ---- Leden
+
+async function renderLeden(view) {
+  view.append(el('h2', {}, 'Leden'));
+  view.append(el('p', { class: 'dim' },
+    'Een lid dat je uit de groep haalt verliest zijn toegang, maar niet zijn aftekeningen. Komt hij terug met een code, dan staat zijn vorderingenstaat er weer.'));
+
+  const rows = await run(async () => check(await db.rpc('group_members', { p_group: group.id })));
+  for (const m of rows) {
+    const card = el('div', { class: 'card' });
+    const select = el('select', {});
+    for (const r of ['lid', 'instructeur', 'beheerder']) {
+      const opt = el('option', { value: r }, { lid: 'Lid', instructeur: 'Instructeur', beheerder: 'Beheerder' }[r]);
+      if (m.role === r) opt.selected = true;
+      select.append(opt);
+    }
+    select.addEventListener('change', async () => {
+      await run(async () => {
+        check(await db.from('memberships').update({ role: select.value })
+          .eq('group_id', group.id).eq('profile_id', m.profile_id));
+      }, 'Rol aangepast');
+      render();
+    });
+
+    card.append(el('div', { class: 'row spread' },
+      el('div', {},
+        el('strong', {}, m.full_name || 'Naam nog niet ingevuld'),
+        m.profile_id === me.id ? el('span', { class: 'chip', style: 'margin-left:8px' }, 'jij') : null,
+        el('div', { class: 'dim' },
+          `${m.in_progress} in opleiding${m.awarded ? ` · ${m.awarded} behaald` : ''}` +
+          (m.sections?.length ? ` · ${m.sections.join(', ')}` : '')),
+      ),
+      el('div', { class: 'row' },
+        el('div', { style: 'width:150px' }, select),
+        el('button', {
+          class: 'btn danger',
+          onclick: async () => {
+            if (!confirmed(`${m.full_name || 'Dit lid'} uit de groep halen?\n\nWat al afgetekend is blijft bewaard.`)) return;
+            await run(async () => {
+              check(await db.rpc('remove_member', { p_group: group.id, p_profile: m.profile_id }));
+            }, 'Uit de groep gehaald');
+            render();
+          },
+        }, 'Verwijderen'),
+      ),
+    ));
+    view.append(card);
+  }
+}
+
+// ---- Codes
+
+async function renderCodes(view) {
+  view.append(el('h2', {}, 'Uitnodigingscodes'));
+
+  const role = el('select', {}, el('option', { value: 'lid' }, 'Lid'),
+    el('option', { value: 'instructeur' }, 'Instructeur'));
+  const label = field('Waarvoor (optioneel)', '', {});
+  const uses = el('select', {}, el('option', { value: '1' }, 'Eén keer te gebruiken'),
+    el('option', { value: '50' }, 'Voor een hele groep'));
+
+  view.append(el('div', { class: 'card' },
+    el('div', { class: 'row' },
+      el('div', { class: 'grow' }, el('label', {}, 'Wordt'), role),
+      label.wrap,
+      el('div', { class: 'grow' }, el('label', {}, 'Geldigheid'), uses),
+      el('button', {
+        class: 'btn',
+        onclick: async () => {
+          await run(async () => {
+            const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let code = '';
+            for (let i = 0; i < 6; i++) code += alphabet[Math.floor(Math.random() * alphabet.length)];
+            check(await db.from('invites').insert({
+              group_id: group.id, code, role: role.value,
+              label: label.input.value.trim() || null, max_uses: Number(uses.value),
+            }));
+          }, 'Code gemaakt');
+          render();
+        },
+      }, 'Code maken'),
+    )));
+
+  const invites = check(await db.from('invites').select('*').eq('group_id', group.id)
+    .order('created_at', { ascending: false }));
+
+  if (!invites.length) view.append(el('p', { class: 'dim' }, 'Nog geen codes.'));
+
+  for (const inv of invites) {
+    view.append(el('div', { class: 'card row spread' },
+      el('div', {},
+        el('strong', { style: 'letter-spacing:3px; font-size:18px' }, inv.code),
+        el('div', { class: 'dim' },
+          `${inv.role}${inv.label ? ` · ${inv.label}` : ''} · ${inv.uses} van ${inv.max_uses} gebruikt`)),
+      el('button', {
+        class: 'btn danger',
+        onclick: async () => {
+          await run(async () => check(await db.from('invites').delete().eq('id', inv.id)), 'Ingetrokken');
+          render();
+        },
+      }, 'Intrekken'),
+    ));
+  }
+}
+
+// ---- Speltakken
+
+async function renderSpeltakken(view) {
+  view.append(el('h2', {}, 'Speltakken'));
+
+  const naam = field('Naam', '', {});
+  view.append(el('div', { class: 'card row' }, naam.wrap,
+    el('button', {
+      class: 'btn',
+      onclick: async () => {
+        if (naam.input.value.trim().length < 2) return;
+        await run(async () => check(await db.from('sections')
+          .insert({ group_id: group.id, name: naam.input.value.trim() })), 'Toegevoegd');
+        render();
+      },
+    }, 'Toevoegen')));
+
+  const sections = check(await db.from('sections').select('*').eq('group_id', group.id)
+    .order('sort_order').order('name'));
+
+  for (const s of sections) {
+    view.append(el('div', { class: 'card row spread' }, el('strong', {}, s.name),
+      el('button', {
+        class: 'btn danger',
+        onclick: async () => {
+          if (!confirmed(`${s.name} verwijderen? De leden blijven bestaan.`)) return;
+          await run(async () => check(await db.from('sections').delete().eq('id', s.id)), 'Verwijderd');
+          render();
+        },
+      }, 'Verwijderen')));
+  }
+}
+
+// ---- Catalogus
+
+async function renderCatalogus(view) {
+  view.append(el('h2', {}, "Diploma's en eisen"));
+  view.append(el('div', { class: 'note' },
+    'Let op: deze lijst is gedeeld en landelijk vastgesteld. Wat je hier verandert geldt voor iedereen in deze database. ' +
+    'Draai je later supabase/010-eisen.sql opnieuw, dan overschrijft die de regels die daarin staan — zet blijvende correcties dus ook in dat bestand.'));
+
+  const [disciplines, diplomas] = await Promise.all([
+    check(await db.from('disciplines').select('*').order('sort_order')),
+    check(await db.from('diplomas').select('*').order('sort_order')),
+  ]);
+
+  for (const d of disciplines) {
+    const box = el('div', { class: 'card' });
+    const naam = field('Discipline', d.name, {});
+    const sub = field('Ondertitel', d.subtitle ?? '', {});
+    box.append(el('div', { class: 'row' }, naam.wrap, sub.wrap,
+      el('button', {
+        class: 'btn ghost',
+        onclick: () => run(async () => check(await db.from('disciplines')
+          .update({ name: naam.input.value, subtitle: sub.input.value || null })
+          .eq('id', d.id)), 'Opgeslagen'),
+      }, 'Opslaan')));
+
+    for (const dip of diplomas.filter((x) => x.discipline_id === d.id)) {
+      box.append(diplomaBlock(dip));
+    }
+
+    const nieuw = field('Nieuw diploma', '', {});
+    box.append(el('details', {}, el('summary', {}, 'Diploma toevoegen'),
+      el('div', { class: 'row', style: 'margin-top:10px' }, nieuw.wrap,
+        el('button', {
+          class: 'btn',
+          onclick: async () => {
+            const name = nieuw.input.value.trim();
+            if (name.length < 2) return;
+            await run(async () => check(await db.from('diplomas').insert({
+              discipline_id: d.id, name,
+              code: `${d.code}-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`.slice(0, 40),
+              sort_order: 99,
+            })), 'Diploma toegevoegd');
+            render();
+          },
+        }, 'Toevoegen'))));
+
+    view.append(box);
+  }
+}
+
+function diplomaBlock(dip) {
+  const details = el('details', {});
+  details.append(el('summary', {}, `${dip.name}${dip.level_label ? ` (${dip.level_label})` : ''}`));
+
+  const body = el('div', { style: 'margin-top:12px' }, el('p', { class: 'dim' }, 'Bezig met laden…'));
+  details.append(body);
+
+  details.addEventListener('toggle', async () => {
+    if (!details.open || details.dataset.loaded) return;
+    details.dataset.loaded = '1';
+    body.innerHTML = '';
+
+    const naam = field('Naam', dip.name, {});
+    const niveau = field('Niveau', dip.level_label ?? '', {});
+    const bron = field('Bron', dip.source ?? '', {});
+    const samenvatting = field('Omschrijving', dip.summary ?? '', { multiline: true, wrapClass: 'grow' });
+
+    body.append(el('div', { class: 'row' }, naam.wrap, niveau.wrap, bron.wrap));
+    body.append(el('div', { class: 'row', style: 'margin-top:10px' }, samenvatting.wrap));
+    body.append(el('div', { class: 'row', style: 'margin-top:10px' },
+      el('button', {
+        class: 'btn ghost',
+        onclick: () => run(async () => check(await db.from('diplomas').update({
+          name: naam.input.value, level_label: niveau.input.value || null,
+          source: bron.input.value || null, summary: samenvatting.input.value || null,
+        }).eq('id', dip.id)), 'Opgeslagen'),
+      }, 'Diploma opslaan'),
+      el('button', {
+        class: 'btn danger',
+        onclick: async () => {
+          if (!confirmed(`${dip.name} verwijderen?\n\nAlle eisen en onderdelen gaan mee. Lopen er opleidingen voor dit diploma, dan weigert de database het.`)) return;
+          await run(async () => check(await db.from('diplomas').delete().eq('id', dip.id)), 'Verwijderd');
+          render();
+        },
+      }, 'Diploma verwijderen')));
+
+    const eisen = check(await db.from('requirements').select('*')
+      .eq('diploma_id', dip.id).order('kind').order('position'));
+
+    for (const kind of ['praktijk', 'theorie']) {
+      body.append(el('h3', {}, kind === 'praktijk' ? 'Praktijk' : 'Theorie'));
+      const top = eisen.filter((r) => r.kind === kind && !r.parent_id);
+      for (const eis of top) {
+        body.append(eisBlock(eis, eisen.filter((r) => r.parent_id === eis.id)));
+      }
+      body.append(nieuweEis(dip.id, kind, top.length + 1));
+    }
+  });
+
+  return details;
+}
+
+function eisBlock(eis, parts) {
+  const wrap = el('div', { class: 'card', style: 'background:var(--bg)' });
+  const nr = field('Nr', eis.position, { wrapClass: 'num' });
+  const titel = field('Eis', eis.title, {});
+  const toelichting = field('Toelichting', eis.detail ?? '', { multiline: true });
+
+  wrap.append(el('div', { class: 'row' }, nr.wrap, titel.wrap,
+    el('button', {
+      class: 'btn ghost',
+      onclick: () => run(async () => check(await db.from('requirements').update({
+        position: Number(nr.input.value), title: titel.input.value,
+        detail: toelichting.input.value || null,
+      }).eq('id', eis.id)), 'Opgeslagen'),
+    }, 'Opslaan'),
+    el('button', {
+      class: 'btn danger',
+      onclick: async () => {
+        if (!confirmed(`Eis "${eis.title}" verwijderen?\n\nDe onderdelen én de aftekeningen die eraan hangen gaan mee.`)) return;
+        await run(async () => check(await db.from('requirements').delete().eq('id', eis.id)), 'Verwijderd');
+        render();
+      },
+    }, 'Verwijderen')));
+  wrap.append(el('div', { class: 'row', style: 'margin-top:8px' }, toelichting.wrap));
+
+  const onderdelen = el('details', {}, el('summary', {}, `${parts.length} onderdelen`));
+  for (const p of parts) {
+    const pt = el('input', { value: p.title });
+    onderdelen.append(el('div', { class: 'part' },
+      el('span', { class: 'dim' }, `${p.position}.`), pt,
+      el('button', {
+        class: 'btn ghost',
+        onclick: () => run(async () => check(await db.from('requirements')
+          .update({ title: pt.value }).eq('id', p.id)), 'Opgeslagen'),
+      }, 'Opslaan'),
+      el('button', {
+        class: 'btn danger',
+        onclick: async () => {
+          if (!confirmed(`Onderdeel "${p.title}" verwijderen?`)) return;
+          await run(async () => check(await db.from('requirements').delete().eq('id', p.id)), 'Verwijderd');
+          render();
+        },
+      }, '×')));
+  }
+
+  const nieuw = el('input', { placeholder: 'Nieuw onderdeel, bijvoorbeeld: Paalsteek' });
+  onderdelen.append(el('div', { class: 'part' }, nieuw,
+    el('button', {
+      class: 'btn',
+      onclick: async () => {
+        if (!nieuw.value.trim()) return;
+        const position = parts.length ? Math.max(...parts.map((p) => p.position)) + 1 : 1;
+        await run(async () => check(await db.from('requirements').insert({
+          diploma_id: eis.diploma_id, parent_id: eis.id, kind: eis.kind,
+          position, title: nieuw.value.trim(),
+          code: `${eis.code}.${position}`,
+        })), 'Onderdeel toegevoegd');
+        render();
+      },
+    }, 'Toevoegen')));
+
+  wrap.append(onderdelen);
+  return wrap;
+}
+
+function nieuweEis(diplomaId, kind, position) {
+  const titel = el('input', { placeholder: `Nieuwe ${kind}eis` });
+  return el('div', { class: 'row', style: 'margin:8px 0 4px' }, titel,
+    el('button', {
+      class: 'btn',
+      onclick: async () => {
+        if (!titel.value.trim()) return;
+        await run(async () => check(await db.from('requirements').insert({
+          diploma_id: diplomaId, kind, position, title: titel.value.trim(),
+          code: `eigen.${diplomaId.slice(0, 8)}.${kind[0]}${position}.${Date.now().toString(36)}`,
+        })), 'Eis toegevoegd');
+        render();
+      },
+    }, 'Toevoegen'));
+}
+
+// ---------------------------------------------------------------- start
+if (db) {
+  db.auth.getSession().then(({ data }) => { if (data.session) start(); });
+} else {
+  document.getElementById('signin-error').textContent =
+    'Geen Supabase-gegevens gevonden. Start deze pagina met "npm run admin" vanuit de projectmap.';
+  document.getElementById('signin-error').classList.remove('hidden');
+}
+</script>
+</body>
+</html>

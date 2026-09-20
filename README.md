@@ -22,6 +22,7 @@ een lid ziet op zijn eigen telefoon hoe ver hij is.
 
 ## Opzet
 
+    admin/            de beheerpagina: één HTML-bestand en een servertje
     src/app/          de schermen (expo-router)
     src/components/   ui.tsx (de bouwstenen), icons.tsx, voortgang.tsx
     src/lib/          api.ts, session.ts, types.ts, dates.ts
@@ -54,6 +55,25 @@ npx expo start
 
 Zonder `.env` start de app ook; hij zegt dan dat hij nog niet gekoppeld is in
 plaats van te crashen.
+
+## De beheerpagina
+
+```bash
+npm run admin
+```
+
+Opent op <http://localhost:8090>. Losse pagina naast de app, voor het werk dat
+je liever op een laptop doet: leden en rollen, iemand uit de groep halen,
+uitnodigingscodes, speltakken, en de diploma's met hun eisen en onderdelen.
+
+Eén HTML-bestand en een servertje zonder dependencies. De Supabase-gegevens
+komen uit dezelfde `.env` als de app, dus er is geen tweede plek waar een
+sleutel staat. Inloggen gaat met je gewone account; wie geen beheerder is krijgt
+hier niets voor elkaar, want het zijn dezelfde policies als in de app.
+
+Wat je in de catalogus verandert geldt voor elke groep in die database, en wordt
+overschreven als je `supabase/010-eisen.sql` opnieuw draait. Blijvende
+correcties horen dus ook in dat bestand — zie [docs/EISEN.md](docs/EISEN.md).
 
 ## Controles
 

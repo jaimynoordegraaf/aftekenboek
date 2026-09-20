@@ -89,6 +89,7 @@ async function main() {
     '003-rpc.sql',
     '011-laatste-beheerder.sql',
     '012-onderdelen.sql',
+    '013-beheer.sql',
     '010-eisen.sql',
   ]) {
     try {
@@ -460,24 +461,79 @@ async function main() {
     `${mine.theorie_done}/${mine.theorie_total}`);
   check('de discipline komt mee', mine.discipline_name === 'Roeien');
 
-  section('De catalogus staat vast');
+  section('De catalogus is van de beheerder');
 
-  const tamper = await refused(
+  // Sinds 013 mag een beheerder de eisen bijwerken vanuit de beheerpagina —
+  // anders blijft de sloep/motorvlet-lijst een SQL-plakoefening.
+  const byAdmin = await refused(
     wim,
-    `update requirements set title = 'Zelf verzonnen' where code = 'roeien-12.p1'`,
+    `update requirements set title = 'Bijgewerkt' where code = 'roeien-12.p1'`,
   );
   const changed = await one(`select title from requirements where code = 'roeien-12.p1'`);
-  check('zelfs een beheerder kan de eisen niet wijzigen',
-    tamper !== null || changed.title !== 'Zelf verzonnen');
+  check('een beheerder mag een eis bijwerken',
+    byAdmin === null && changed.title === 'Bijgewerkt',
+    `${byAdmin ?? changed.title}`);
 
-  const addDiploma = await refused(
-    wim,
+  // ... en niemand anders.
+  await refused(
+    sam,
+    `update requirements set title = 'Door een lid' where code = 'roeien-12.p1'`,
+  );
+  const afterLid = await one(`select title from requirements where code = 'roeien-12.p1'`);
+  check('een lid niet', afterLid.title === 'Bijgewerkt', afterLid.title);
+
+  await as(wim, () =>
+    db.query(`update requirements set title = $1 where code = 'roeien-12.p1'`, [
+      'Het schip vaarklaar en nachtklaar maken',
+    ]),
+  );
+
+  await refused(
+    sam,
     `insert into diplomas (discipline_id, code, name)
      select id, 'verzonnen', 'Verzonnen' from disciplines limit 1`,
   );
   const diplomaCount = await one('select count(*)::int as n from diplomas');
-  check('en er kan geen diploma bij via de app',
-    addDiploma !== null || diplomaCount.n === 12);
+  check('en een lid kan er geen diploma bij zetten', diplomaCount.n === 12,
+    `${diplomaCount.n}`);
+
+  section('Iemand uit de groep halen');
+
+  const gone = await refused(wim, 'select remove_member($1, $2)', [jwf, nina]);
+  check('een beheerder haalt iemand eruit', gone === null, gone ?? '');
+  check('en die staat niet meer in de ledenlijst',
+    (await as(wim, async () => (await db.query('select * from group_members($1)', [jwf])).rows))
+      .every((m) => m.full_name !== 'Nina het Lid'));
+
+  // De aftekeningen blijven: komt ze terug, dan staat haar lijst er weer.
+  const kept = await one(
+    `select count(*)::int as n from enrollments where profile_id = '${nina}'`,
+  );
+  check('haar voortgang blijft bewaard', kept.n === 1, `${kept.n}`);
+
+  const byLid = await refused(sam, 'select remove_member($1, $2)', [jwf, wim]);
+  check('een lid kan niemand verwijderen', byLid !== null, 'het lukte wel');
+
+  const lastOne = await refused(wim, 'select remove_member($1, $2)', [jwf, wim]);
+  check('de laatste beheerder kan zichzelf er niet uit halen', lastOne !== null,
+    'het lukte wel');
+
+  const rawDelete = await refused(
+    wim,
+    'delete from memberships where group_id = $1 and profile_id = $2',
+    [jwf, sam],
+  );
+  const samStill = await one(
+    `select count(*)::int as n from memberships where group_id = '${jwf}' and profile_id = '${sam}'`,
+  );
+  check('en verwijderen kan niet om remove_member heen',
+    rawDelete !== null || samStill.n === 1, `${samStill.n}`);
+
+  // Nina hoort er weer bij voor de tests die hierna komen.
+  await db.exec(
+    `insert into memberships (group_id, profile_id, role)
+     values ('${jwf}', '${nina}', 'lid')`,
+  );
 
   section('De laatste beheerder');
 

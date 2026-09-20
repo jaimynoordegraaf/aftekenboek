@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { RefreshControl, View } from 'react-native';
+import { Alert, RefreshControl, View } from 'react-native';
 
 import {
+  Button,
   Card,
   Chip,
   Empty,
@@ -11,10 +12,10 @@ import {
   Screen,
   Txt,
 } from '@/components/ui';
-import { fetchMembers, setMemberRole } from '@/lib/api';
+import { fetchMembers, removeMember, setMemberRole } from '@/lib/api';
 import { useSession } from '@/lib/session';
 import { useAsync } from '@/lib/use-async';
-import { ROLE_LABEL, type Role } from '@/lib/types';
+import { ROLE_LABEL, type MemberRow, type Role } from '@/lib/types';
 import { space } from '@/theme';
 
 const ROLES: Role[] = ['lid', 'instructeur', 'beheerder'];
@@ -49,6 +50,34 @@ export default function Rollen() {
     }
   }
 
+  function remove(m: MemberRow) {
+    Alert.alert(
+      `${m.full_name || 'Dit lid'} uit de groep halen?`,
+      'Wat al afgetekend is blijft bewaard. Meldt hij zich later weer aan met een code, dan staat zijn vorderingenstaat er weer.',
+      [
+        { text: 'Annuleren', style: 'cancel' },
+        {
+          text: 'Uit de groep halen',
+          style: 'destructive',
+          onPress: async () => {
+            if (!groupId) return;
+            setBusy(m.profile_id);
+            setError(null);
+            try {
+              await removeMember(groupId, m.profile_id);
+              await reload();
+              if (m.profile_id === userId) await reloadSession();
+            } catch (e) {
+              setError(e);
+            } finally {
+              setBusy(null);
+            }
+          },
+        },
+      ],
+    );
+  }
+
   if (loading) return <Loading />;
 
   const members = data ?? [];
@@ -79,6 +108,11 @@ export default function Rollen() {
                   />
                 ))}
               </Row>
+              <Button
+                variant="ghost"
+                label="Uit de groep halen"
+                onPress={() => remove(m)}
+              />
             </Card>
           ))
         )}
