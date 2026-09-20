@@ -3,6 +3,7 @@ import { Pressable, RefreshControl, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import {
+  Button,
   Card,
   Chip,
   Empty,
@@ -67,6 +68,8 @@ function Vaarders() {
       <View style={{ gap: space.md }}>
         <ErrorNote error={error} />
 
+        <Button label="Lid toevoegen" onPress={() => router.push('/nieuw/lid')} />
+
         {members.length > 8 ? (
           <Field
             value={query}
@@ -111,7 +114,7 @@ function Vaarders() {
                 ? undefined
                 : section
                   ? 'Koppel leden aan een speltak via Meer › Beheer › Rollen.'
-                  : 'Deel een uitnodigingscode uit vanuit Meer › Beheer, dan melden ze zich hier aan.'
+                  : 'Voeg ze hierboven toe. Een vaarder hoeft geen telefoon of account te hebben om een vorderingenstaat te krijgen.'
             }
           />
         ) : (

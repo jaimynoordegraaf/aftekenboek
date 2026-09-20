@@ -1,9 +1,19 @@
+import { useState } from 'react';
 import { RefreshControl, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 
-import { Button, Empty, ErrorNote, Loading, Screen, Txt } from '@/components/ui';
+import {
+  Button,
+  Card,
+  Empty,
+  ErrorNote,
+  Field,
+  Loading,
+  Screen,
+  Txt,
+} from '@/components/ui';
 import { EnrollmentCard } from '@/components/voortgang';
-import { fetchEnrollments, fetchProfileName } from '@/lib/api';
+import { fetchEnrollments, fetchProfileName, setMemberName } from '@/lib/api';
 import { useIsStaff, useSession } from '@/lib/session';
 import { useAsync } from '@/lib/use-async';
 import { space } from '@/theme';
@@ -79,7 +89,70 @@ export default function Lid() {
             ))}
           </View>
         ) : null}
+
+        {staff ? (
+          <NaamAanpassen
+            // De naam komt later binnen dan de eerste render; de key zorgt dat
+            // het veld opnieuw begint zodra hij er is, in plaats van leeg te
+            // blijven staan.
+            key={name.data ?? ''}
+            profileId={id}
+            current={name.data ?? ''}
+            onSaved={() => void name.reload()}
+          />
+        ) : null}
       </View>
     </Screen>
+  );
+}
+
+/**
+ * Een naam corrigeren.
+ *
+ * Nodig omdat de meeste vaarders niet inloggen en hun eigen naam dus nooit
+ * kunnen rechtzetten. Onderaan het scherm, want je komt hier om af te tekenen,
+ * niet om te typen.
+ */
+function NaamAanpassen({
+  profileId,
+  current,
+  onSaved,
+}: {
+  profileId: string;
+  current: string;
+  onSaved: () => void;
+}) {
+  const groupId = useSession((s) => s.activeGroupId);
+  const [name, setName] = useState(current);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+
+  const changed = name.trim() !== current.trim() && name.trim().length >= 2;
+
+  return (
+    <Card style={{ marginTop: space.xl }}>
+      <Txt variant="subheading">Naam</Txt>
+      <Field value={name} onChangeText={setName} autoCapitalize="words" />
+      <ErrorNote error={error} />
+      <Button
+        variant="secondary"
+        label="Naam opslaan"
+        busy={busy}
+        disabled={!changed}
+        onPress={async () => {
+          if (!groupId) return;
+          setBusy(true);
+          setError(null);
+          try {
+            await setMemberName(groupId, profileId, name);
+            onSaved();
+          } catch (e) {
+            setError(e);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      />
+    </Card>
   );
 }

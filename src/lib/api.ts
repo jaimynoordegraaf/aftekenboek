@@ -61,6 +61,34 @@ export async function fetchMembers(groupId: string): Promise<MemberRow[]> {
   return (data ?? []) as MemberRow[];
 }
 
+/**
+ * Iemand in het register zetten die geen account heeft en dat ook niet krijgt.
+ * De meeste vaarders zijn kinderen zonder telefoon; hun vorderingenstaat moet er
+ * zijn zonder dat zij zich ergens aanmelden.
+ */
+export async function addMember(groupId: string, fullName: string): Promise<string> {
+  const { data, error } = await db().rpc('add_member', {
+    p_group: groupId,
+    p_name: fullName.trim(),
+  });
+  if (error) throw error;
+  return data as string;
+}
+
+/** Een naam corrigeren voor iemand die dat zelf niet kan, omdat hij niet inlogt. */
+export async function setMemberName(
+  groupId: string,
+  profileId: string,
+  fullName: string,
+): Promise<void> {
+  const { error } = await db().rpc('set_member_name', {
+    p_group: groupId,
+    p_profile: profileId,
+    p_name: fullName.trim(),
+  });
+  if (error) throw error;
+}
+
 export async function fetchProfileName(profileId: string): Promise<string> {
   const { data, error } = await db()
     .from('profiles')

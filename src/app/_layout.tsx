@@ -86,6 +86,10 @@ function Gate() {
           name="nieuw/opleiding"
           options={{ title: 'Opleiding starten', presentation: 'modal' }}
         />
+        <Stack.Screen
+          name="nieuw/lid"
+          options={{ title: 'Lid toevoegen', presentation: 'modal' }}
+        />
         <Stack.Screen name="beheer/index" options={{ title: 'Beheer' }} />
         <Stack.Screen name="beheer/leden" options={{ title: 'Rollen' }} />
         <Stack.Screen name="beheer/speltakken" options={{ title: 'Speltakken' }} />

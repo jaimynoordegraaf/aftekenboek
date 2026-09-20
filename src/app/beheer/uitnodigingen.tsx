@@ -21,7 +21,11 @@ import { useTheme } from '@/lib/use-theme';
 import { ROLE_LABEL, type Role } from '@/lib/types';
 import { space } from '@/theme';
 
-const ROLES: Role[] = ['lid', 'instructeur'];
+// Instructeur eerst en als standaard: codes zijn er om iemand te laten
+// inloggen, en leden loggen niet in. Die voeg je toe via Vaarders › Lid
+// toevoegen. Lid blijft mogelijk voor het enkele geval dat er wél een telefoon
+// is en iemand zijn eigen voortgang wil volgen.
+const ROLES: Role[] = ['instructeur', 'lid'];
 
 /** Codes of six characters; the only way into a groep. */
 export default function Uitnodigingen() {
@@ -30,7 +34,7 @@ export default function Uitnodigingen() {
 
   const sections = useSession((s) => s.sections);
 
-  const [role, setRole] = useState<Role>('lid');
+  const [role, setRole] = useState<Role>('instructeur');
   const [label, setLabel] = useState('');
   const [many, setMany] = useState(false);
   /** Null is: geen speltak, dan koppelt de code ze nergens aan. */

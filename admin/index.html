@@ -300,7 +300,20 @@ function render() {
 async function renderLeden(view) {
   view.append(el('h2', {}, 'Leden'));
   view.append(el('p', { class: 'dim' },
-    'Een lid dat je uit de groep haalt verliest zijn toegang, maar niet zijn aftekeningen. Komt hij terug met een code, dan staat zijn vorderingenstaat er weer.'));
+    'Een vaarder hoeft geen telefoon of account te hebben om hier te staan. Haal je iemand uit de groep, dan verliest hij zijn plek in de lijst maar niet zijn aftekeningen.'));
+
+  const nieuw = field('Naam', '', {});
+  view.append(el('div', { class: 'card row' }, nieuw.wrap,
+    el('button', {
+      class: 'btn',
+      onclick: async () => {
+        if (nieuw.input.value.trim().length < 2) return;
+        await run(async () => check(await db.rpc('add_member', {
+          p_group: group.id, p_name: nieuw.input.value.trim(),
+        })), 'Lid toegevoegd');
+        render();
+      },
+    }, 'Lid toevoegen')));
 
   const [rows, sections] = await Promise.all([
     run(async () => check(await db.rpc('group_members', { p_group: group.id }))),
@@ -353,11 +366,28 @@ async function renderLeden(view) {
       render();
     });
 
+    // Naam als invoerveld: wie niet inlogt kan zijn eigen naam nooit
+    // rechtzetten, dus moet iemand anders dat hier kunnen.
+    const naam = el('input', { value: m.full_name });
+    const bewaar = el('button', {
+      class: 'btn ghost',
+      onclick: async () => {
+        if (naam.value.trim().length < 2) return;
+        await run(async () => check(await db.rpc('set_member_name', {
+          p_group: group.id, p_profile: m.profile_id, p_name: naam.value.trim(),
+        })), 'Naam opgeslagen');
+        render();
+      },
+    }, 'Naam opslaan');
+
     card.append(el('div', { class: 'row spread' },
-      el('div', {},
-        el('strong', {}, m.full_name || 'Naam nog niet ingevuld'),
-        m.profile_id === me.id ? el('span', { class: 'chip', style: 'margin-left:8px' }, 'jij') : null,
-        el('div', { class: 'dim' },
+      el('div', { class: 'grow' },
+        el('div', { class: 'row' },
+          naam,
+          bewaar,
+          m.profile_id === me.id ? el('span', { class: 'chip' }, 'jij') : null,
+        ),
+        el('div', { class: 'dim', style: 'margin-top:6px' },
           `${m.in_progress} in opleiding${m.awarded ? ` · ${m.awarded} behaald` : ''}` +
           (m.sections?.length ? ` · ${m.sections.join(', ')}` : '')),
       ),
