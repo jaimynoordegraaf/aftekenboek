@@ -80,12 +80,16 @@ async function main() {
   `);
   check('auth-stub staat', true);
 
+  // 010-eisen.sql gaat als laatste: de catalogus hangt inmiddels aan elke
+  // schemawijziging die erna genummerd is, en onderdelen kunnen pas geladen
+  // worden als requirements.parent_id bestaat.
   for (const file of [
     '001-core.sql',
     '002-rls.sql',
     '003-rpc.sql',
-    '010-eisen.sql',
     '011-laatste-beheerder.sql',
+    '012-onderdelen.sql',
+    '010-eisen.sql',
   ]) {
     try {
       await db.exec(readFileSync(join(sqlDir, file), 'utf8'));
@@ -141,13 +145,15 @@ async function main() {
   const reqs = await one('select count(*)::int as n from requirements');
   check('meer dan 250 eisen', reqs.n > 250, `${reqs.n}`);
 
+  // parent_id is null: onderdelen tellen niet mee als eis — dat is de hele
+  // afspraak achter 012-onderdelen.sql.
   const roeien = await one(`
     select
       count(*) filter (where kind = 'praktijk')::int as p,
       count(*) filter (where kind = 'theorie')::int  as t
     from requirements r
     join diplomas d on d.id = r.diploma_id
-    where d.code = 'roeien-12'
+    where d.code = 'roeien-12' and r.parent_id is null
   `);
   check('Roeien I/II: 9 praktijk, 8 theorie', roeien.p === 9 && roeien.t === 8,
     `${roeien.p}/${roeien.t}`);
@@ -159,7 +165,9 @@ async function main() {
     select d.code, count(*)::int as n
     from requirements r
     join diplomas d on d.id = r.diploma_id
-    where r.detail is null and d.code not like 'sloep-%'
+    where r.detail is null
+      and r.parent_id is null
+      and d.code not like 'sloep-%'
     group by d.code
     order by d.code
   `);
@@ -176,6 +184,50 @@ async function main() {
   `);
   check('sloep-praktijk draagt het handboek-onderdeel', sloepGrouped.n === 33,
     `${sloepGrouped.n}`);
+
+  section('Onderdelen binnen een eis');
+
+  const knopen = await db.query(`
+    select r.position, r.title
+    from requirements r
+    join requirements p on p.id = r.parent_id
+    where p.code = 'roeien-12.t1'
+    order by r.position
+  `);
+  check('Schiemanswerk is opgesplitst', knopen.rows.length === 6,
+    `${knopen.rows.length}`);
+  check('en de eerste is de halve steek',
+    (knopen.rows[0]?.title ?? '').startsWith('Twee halve steken'),
+    knopen.rows[0]?.title ?? 'geen');
+
+  const onderdelen = await one(
+    'select count(*)::int as n from requirements where parent_id is not null',
+  );
+  check('er staan ruim 200 onderdelen klaar', onderdelen.n > 200, `${onderdelen.n}`);
+
+  const wees = await one(`
+    select count(*)::int as n
+    from requirements r join requirements p on p.id = r.parent_id
+    where r.diploma_id <> p.diploma_id
+  `);
+  check('geen onderdeel onder een ander diploma', wees.n === 0, `${wees.n}`);
+
+  // Twee lagen diep zou een boom maken van wat een lijst moet blijven.
+  const parentCode = await one(
+    `select id, diploma_id from requirements where code = 'roeien-12.t1.1'`,
+  );
+  let nested = null;
+  try {
+    await db.query(
+      `insert into requirements (diploma_id, parent_id, code, kind, position, title)
+       values ($1, $2, 'test.te.diep', 'theorie', 1, 'Te diep')`,
+      [parentCode.diploma_id, parentCode.id],
+    );
+  } catch (e) {
+    nested = e.message;
+  }
+  check('een onderdeel van een onderdeel wordt geweigerd', nested !== null,
+    'het lukte wel');
 
   section('De seed kan opnieuw');
 
@@ -364,11 +416,37 @@ async function main() {
     const r = await db.query('select * from enrollment_sheet($1)', [samEnrollment]);
     return r.rows;
   });
-  check('de aftekenlijst heeft alle 17 eisen', sheet.length === 17, `${sheet.length}`);
+  const eisen = sheet.filter((r) => r.parent_id === null);
+  check('de aftekenlijst heeft alle 17 eisen', eisen.length === 17, `${eisen.length}`);
+  check('en de onderdelen komen mee', sheet.length > eisen.length,
+    `${sheet.length} regels`);
   check('precies één eis is afgetekend',
     sheet.filter((r) => r.signed_at !== null).length === 1);
   check('praktijk staat voor theorie', sheet[0].kind === 'praktijk');
   check('de nummering volgt het handboek', sheet[0].position === 1);
+
+  // Een onderdeel staat direct achter zijn eigen eis, zodat het scherm de
+  // lijst van boven naar beneden kan doorlopen.
+  const commandoIndex = sheet.findIndex((r) => r.parent_id === null && r.position === 3);
+  check('onderdelen staan achter hun eis',
+    sheet[commandoIndex + 1]?.parent_id === sheet[commandoIndex]?.requirement_id,
+    'de volgorde klopt niet');
+
+  // Een onderdeel aftekenen is gewoon aftekenen — maar het verschuift de
+  // voortgang niet, want de eis blijft het oordeel van de instructeur.
+  const knoop = (await one(`select id from requirements where code = 'roeien-12.t1.2'`)).id;
+  await as(wim, () =>
+    db.query(`select set_sign_off($1, $2, true, null)`, [samEnrollment, knoop]),
+  );
+  const afterKnoop = await as(wim, async () => {
+    const r = await db.query('select * from member_enrollments($1, $2)', [jwf, sam]);
+    return r.rows[0];
+  });
+  check('een onderdeel aftekenen kan',
+    (await one(`select count(*)::int as n from sign_offs where requirement_id = '${knoop}'`)).n === 1);
+  check('maar het telt niet mee als eis',
+    Number(afterKnoop.theorie_done) === 0 && Number(afterKnoop.theorie_total) === 8,
+    `${afterKnoop.theorie_done}/${afterKnoop.theorie_total}`);
 
   const mine = await as(wim, async () => {
     const r = await db.query('select * from member_enrollments($1, $2)', [jwf, sam]);

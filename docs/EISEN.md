@@ -35,6 +35,33 @@ Twee dingen zijn samengevat in plaats van uitgeschreven:
 - **Eisen die letterlijk gelijk zijn aan een lager niveau** verwijzen daarnaar
   ("als bij Kielboot III") en noemen daarna wat er bij dat niveau bij komt.
 
+## Losse onderdelen binnen een eis
+
+"Schiemanswerk" is één eis, maar er zitten zes knopen achter. Waar het handboek
+zo'n opsomming geeft — knopen, roeicommando's, zeiltermen, onderdelen van de
+boot — staan die als losse regels onder de eis, uitklapbaar op de aftekenlijst.
+Ruim 200 stuks over alle diploma's.
+
+Ze worden afgetekend zoals alles hier, met datum en naam, maar **ze tellen niet
+mee in de voortgang**: alle zes de knopen gelegd is niet hetzelfde als "beheerst
+schiemanswerk", en die beoordeling blijft van de instructeur. Het aantal eisen
+van een diploma blijft dus staan op wat het handboek zegt.
+
+De code van een onderdeel is die van zijn eis plus het nummer: `roeien-12.t1.3`
+is de derde knoop van Schiemanswerk bij Roeien I/II. Toevoegen gaat in hetzelfde
+bestand, in het blok onderaan:
+
+```sql
+('kielboot-1.t1', 7, $$Slipsteek$$),
+```
+
+Bewust **niet** uitgesplitst: de artikellijsten uit het Binnenvaartpolitie-
+reglement. Vanaf Roeien III en Kielboot III zijn dat er tientallen, en een scherm
+met tachtig vinkjes helpt niemand op een steiger.
+
+Onderdelen gaan één laag diep; de database weigert een onderdeel van een
+onderdeel.
+
 ## Wat je nog moet nakijken
 
 **Sloep en motorvlet.** Dat handboek heeft geen toelichting per eis — alleen

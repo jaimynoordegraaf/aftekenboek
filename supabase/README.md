@@ -30,9 +30,16 @@ project dat al bestaat:
                               tabellen open
     003-rpc.sql               create_group, redeem_invite, group_members,
                               member_enrollments, enrollment_sheet, set_sign_off
-    010-eisen.sql             de diploma's en hun eisen
+    010-eisen.sql             de diploma's, hun eisen en de losse onderdelen
     011-laatste-beheerder.sql een groep kan zijn laatste beheerder niet
                               kwijtraken
+    012-onderdelen.sql        eisen kunnen losse onderdelen hebben (knopen,
+                              commando's, termen)
+
+`010-eisen.sql` draait **als laatste**, ook al is zijn nummer lager. De catalogus
+hangt aan elke schemawijziging die erna genummerd is, dus hij wordt steeds
+opnieuw geladen nadat de rest gedraaid heeft. `schema.sql` zet ze al in die
+volgorde.
 
 `010-eisen.sql` mag je zo vaak draaien als je wilt: hij werkt bij op `code`, dus
 ids blijven gelijk en aftekeningen die er al zijn blijven kloppen. Zie

@@ -88,6 +88,8 @@ export type Diploma = {
 export type Requirement = {
   id: string;
   diploma_id: string;
+  /** Null voor een eis; gevuld voor een los onderdeel binnen die eis. */
+  parent_id: string | null;
   code: string;
   kind: RequirementKind;
   position: number;
@@ -135,6 +137,8 @@ export type EnrollmentRow = {
 /** One line of the aftekenlijst: `enrollment_sheet()`. */
 export type SheetRow = {
   requirement_id: string;
+  /** Null voor een eis; gevuld voor een los onderdeel binnen die eis. */
+  parent_id: string | null;
   kind: RequirementKind;
   position: number;
   title: string;

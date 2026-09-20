@@ -4,6 +4,7 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 
 import {
   Card,
+  Disclosure,
   Divider,
   ErrorNote,
   Loading,
@@ -23,10 +24,22 @@ export default function DiplomaDetail() {
 
   const { data, loading, error } = useAsync(() => fetchDiploma(id), [id]);
 
-  const shown = useMemo(
-    () => (data?.requirements ?? []).filter((r) => r.kind === kind),
-    [data, kind],
-  );
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+
+  /** Eisen van deze soort, elk met de onderdelen die eronder hangen. */
+  const shown = useMemo(() => {
+    const all = (data?.requirements ?? []).filter((r) => r.kind === kind);
+    const parts = new Map<string, typeof all>();
+    for (const r of all) {
+      if (!r.parent_id) continue;
+      const list = parts.get(r.parent_id);
+      if (list) list.push(r);
+      else parts.set(r.parent_id, [r]);
+    }
+    return all
+      .filter((r) => !r.parent_id)
+      .map((eis) => ({ eis, parts: parts.get(eis.id) ?? [] }));
+  }, [data, kind]);
 
   if (loading) return <Loading />;
   if (!data) {
@@ -38,9 +51,10 @@ export default function DiplomaDetail() {
   }
 
   const { diploma, discipline, requirements } = data;
+  // De eisen zelf; onderdelen tellen niet mee in wat een diploma vraagt.
   const counts = {
-    praktijk: requirements.filter((r) => r.kind === 'praktijk').length,
-    theorie: requirements.filter((r) => r.kind === 'theorie').length,
+    praktijk: requirements.filter((r) => r.kind === 'praktijk' && !r.parent_id).length,
+    theorie: requirements.filter((r) => r.kind === 'theorie' && !r.parent_id).length,
   };
 
   return (
@@ -65,22 +79,46 @@ export default function DiplomaDetail() {
         />
 
         <Card style={{ gap: 0 }}>
-          {shown.map((r, i) => (
-            <View key={r.id}>
-              {i > 0 ? <Divider /> : null}
-              <View style={{ paddingVertical: space.md, gap: 2 }}>
-                <Txt>
-                  <Txt dim>{r.position}. </Txt>
-                  {r.title}
-                </Txt>
-                {r.detail ? (
-                  <Txt variant="small" dim>
-                    {r.detail}
+          {shown.map(({ eis, parts }, i) => {
+            const isOpen = open[eis.id] ?? false;
+            return (
+              <View key={eis.id}>
+                {i > 0 ? <Divider /> : null}
+                <View style={{ paddingVertical: space.md, gap: 2 }}>
+                  <Txt>
+                    <Txt dim>{eis.position}. </Txt>
+                    {eis.title}
                   </Txt>
+                  {eis.detail ? (
+                    <Txt variant="small" dim>
+                      {eis.detail}
+                    </Txt>
+                  ) : null}
+                </View>
+
+                {parts.length > 0 ? (
+                  <View style={{ paddingLeft: 0, paddingBottom: space.sm }}>
+                    <Disclosure
+                      open={isOpen}
+                      label={`${parts.length} onderdelen`}
+                      onToggle={() => setOpen((o) => ({ ...o, [eis.id]: !isOpen }))}
+                    />
+                    {isOpen
+                      ? parts.map((p) => (
+                          <Txt
+                            key={p.id}
+                            variant="small"
+                            dim
+                            style={{ paddingLeft: 38, paddingBottom: space.xs }}>
+                            {p.position}. {p.title}
+                          </Txt>
+                        ))
+                      : null}
+                  </View>
                 ) : null}
               </View>
-            </View>
-          ))}
+            );
+          })}
         </Card>
 
         <View style={{ gap: space.xs }}>

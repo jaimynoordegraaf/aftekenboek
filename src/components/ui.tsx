@@ -474,6 +474,59 @@ export function CheckRow({
   );
 }
 
+/**
+ * De uitklapper onder een eis die losse onderdelen heeft.
+ *
+ * Dichtgeklapt staat er hoeveel er al af zijn, want dat is het enige dat je
+ * wilt weten terwijl je langs de lijst scrollt. De hele lijst opengeklapt
+ * laten staan maakt van negen eisen een scherm van tachtig regels.
+ */
+export function Disclosure({
+  open,
+  onToggle,
+  label,
+  done,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  label: string;
+  /** Alles af: dan mag het groen, ook als de eis zelf nog niet is afgetekend. */
+  done?: boolean;
+}) {
+  const t = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ expanded: open }}
+      accessibilityLabel={`${label}, ${open ? 'inklappen' : 'uitklappen'}`}
+      onPress={onToggle}
+      style={({ pressed }) => ({
+        opacity: pressed ? 0.6 : 1,
+        paddingBottom: space.md,
+        paddingLeft: 38,
+      })}>
+      <Row gap={space.xs}>
+        <Text
+          style={{
+            color: done ? t.good : t.textDim,
+            fontSize: 11,
+            width: 12,
+          }}>
+          {open ? '▼' : '▶'}
+        </Text>
+        <Text
+          style={{
+            color: done ? t.good : t.accentText,
+            fontSize: 13,
+            fontWeight: '600',
+          }}>
+          {label}
+        </Text>
+      </Row>
+    </Pressable>
+  );
+}
+
 // ---------------------------------------------------------------- states
 
 export function Loading({ label }: { label?: string }) {

@@ -6,6 +6,7 @@ import {
   Button,
   Card,
   CheckRow,
+  Disclosure,
   Divider,
   ErrorNote,
   Field,
@@ -49,16 +50,42 @@ export default function Aftekenlijst() {
   const [pending, setPending] = useState<Record<string, boolean>>({});
   const [failure, setFailure] = useState<unknown>(null);
   const [noteFor, setNoteFor] = useState<SheetRow | null>(null);
+  // Dichtgeklapt beginnen: negen eisen met al hun onderdelen open is een
+  // scherm waar je doorheen moet scrollen om te zien waar je bent.
+  const [open, setOpen] = useState<Record<string, boolean>>({});
 
   const enrollment = useAsync(() => fetchEnrollment(id), [id]);
   const sheet = useAsync(() => fetchSheet(id), [id]);
 
   const rows = sheet.data ?? [];
-  const shown = useMemo(() => rows.filter((r) => r.kind === kind), [rows, kind]);
 
+  /**
+   * De lijst komt plat binnen: eisen en hun onderdelen door elkaar, maar wel
+   * in volgorde. Hier wordt er één laag van gemaakt, want dat is wat het
+   * scherm toont — dieper gaat het niet, en dat bewaakt de database.
+   */
+  const tree = useMemo(() => {
+    const parts = new Map<string, SheetRow[]>();
+    for (const r of rows) {
+      // Geen `=== null`: een database waar 012-onderdelen.sql nog niet op
+      // gedraaid heeft stuurt het veld helemaal niet mee, en dan is het
+      // undefined. Met een strenge vergelijking zou de hele lijst leeg blijven
+      // en zou er "0 van 0" staan zonder dat iets zegt waarom.
+      if (!r.parent_id || r.kind !== kind) continue;
+      const list = parts.get(r.parent_id);
+      if (list) list.push(r);
+      else parts.set(r.parent_id, [r]);
+    }
+    return rows
+      .filter((r) => !r.parent_id && r.kind === kind)
+      .map((eis) => ({ eis, parts: parts.get(eis.requirement_id) ?? [] }));
+  }, [rows, kind]);
+
+  // Alleen de eisen tellen; onderdelen zijn een hulpmiddel, geen eis. Dezelfde
+  // afspraak als in member_enrollments, anders spreken de balken elkaar tegen.
   const counts = useMemo(() => {
     const per = (k: RequirementKind) => {
-      const all = rows.filter((r) => r.kind === k);
+      const all = rows.filter((r) => r.kind === k && !r.parent_id);
       return { done: all.filter((r) => r.signed_at !== null).length, total: all.length };
     };
     return { praktijk: per('praktijk'), theorie: per('theorie') };
@@ -181,32 +208,62 @@ export default function Aftekenlijst() {
         )}
 
         <Card style={{ gap: 0 }}>
-          {shown.map((r, i) => (
-            <View key={r.requirement_id}>
-              {i > 0 ? <Divider /> : null}
-              <CheckRow
-                number={r.position}
-                title={r.title}
-                detail={r.detail}
-                checked={r.signed_at !== null}
-                busy={pending[r.requirement_id]}
-                disabled={!staff}
-                onPress={() => void toggle(r)}
-                onLongPress={() => (r.signed_at ? setNoteFor(r) : undefined)}
-                signedLine={
-                  r.signed_at
-                    ? [
-                        `Afgetekend ${formatDay(r.signed_at)}`,
-                        r.signed_by_name ? `door ${r.signed_by_name}` : null,
-                        r.note ? `— ${r.note}` : null,
-                      ]
-                        .filter(Boolean)
-                        .join(' ')
-                    : null
-                }
-              />
-            </View>
-          ))}
+          {tree.map(({ eis, parts }, i) => {
+            const partsDone = parts.filter((p) => p.signed_at !== null).length;
+            const isOpen = open[eis.requirement_id] ?? false;
+
+            return (
+              <View key={eis.requirement_id}>
+                {i > 0 ? <Divider /> : null}
+                <CheckRow
+                  number={eis.position}
+                  title={eis.title}
+                  detail={eis.detail}
+                  checked={eis.signed_at !== null}
+                  busy={pending[eis.requirement_id]}
+                  disabled={!staff}
+                  onPress={() => void toggle(eis)}
+                  onLongPress={() => (eis.signed_at ? setNoteFor(eis) : undefined)}
+                  signedLine={signedLine(eis)}
+                />
+
+                {parts.length > 0 ? (
+                  <>
+                    <Disclosure
+                      open={isOpen}
+                      done={partsDone === parts.length}
+                      label={`${partsDone} van ${parts.length} onderdelen`}
+                      onToggle={() =>
+                        setOpen((o) => ({
+                          ...o,
+                          [eis.requirement_id]: !isOpen,
+                        }))
+                      }
+                    />
+                    {isOpen ? (
+                      <View style={{ paddingLeft: 38, paddingBottom: space.sm }}>
+                        {parts.map((p) => (
+                          <CheckRow
+                            key={p.requirement_id}
+                            number={p.position}
+                            title={p.title}
+                            checked={p.signed_at !== null}
+                            busy={pending[p.requirement_id]}
+                            disabled={!staff}
+                            onPress={() => void toggle(p)}
+                            onLongPress={() =>
+                              p.signed_at ? setNoteFor(p) : undefined
+                            }
+                            signedLine={signedLine(p)}
+                          />
+                        ))}
+                      </View>
+                    ) : null}
+                  </>
+                ) : null}
+              </View>
+            );
+          })}
         </Card>
 
         {staff ? (
@@ -439,4 +496,16 @@ function NoteDialog({
       </View>
     </Modal>
   );
+}
+
+/** "Afgetekend gisteren door Wim de Vries — nog een keer bij meer wind" */
+function signedLine(r: SheetRow): string | null {
+  if (!r.signed_at) return null;
+  return [
+    `Afgetekend ${formatDay(r.signed_at)}`,
+    r.signed_by_name ? `door ${r.signed_by_name}` : null,
+    r.note ? `— ${r.note}` : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
 }

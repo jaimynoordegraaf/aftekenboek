@@ -1,9 +1,11 @@
 -- aftekenboek — het hele schema in één bestand.
 --
--- Dit is 001-core.sql, 002-rls.sql, 003-rpc.sql, 010-eisen.sql en
--- 011-laatste-beheerder.sql achter elkaar, voor een nieuw Supabase-project.
--- Draai op een bestaand project de losse genummerde bestanden.
--- Gegenereerd — bewerk de genummerde bestanden.
+-- Voor een nieuw Supabase-project: alles in één keer plakken. Draai op een
+-- bestaand project de losse genummerde bestanden.
+--
+-- Let op de volgorde: 010-eisen.sql staat hier achteraan, niet op nummer.
+-- De catalogus hangt aan elke schemawijziging die erna genummerd is, dus hij
+-- wordt als laatste geladen. Gegenereerd — bewerk de genummerde bestanden.
 
 
 -- ============================================================ 001-core.sql
@@ -696,6 +698,230 @@ begin
 end;
 $fn$;
 
+-- ============================================================ 011-laatste-beheerder.sql
+
+-- aftekenboek — een groep raakt zijn laatste beheerder niet kwijt
+--
+-- Het rollenscherm liet een beheerder zichzelf met één tik lid maken. Daarna
+-- kan diezelfde persoon niets meer beheren — ook niet zijn eigen rol
+-- terugzetten — en is er niemand anders die het kan. De enige uitweg is de SQL
+-- Editor, en dat is geen uitweg voor een leidinggevende op een vaaravond.
+--
+-- Een waarschuwing in de app was er al en hielp niet, want de tik is precies
+-- even makkelijk met of zonder waarschuwing. Dus staat de regel hier: wie de
+-- laatste beheerder van een groep is, kan die rol niet verliezen.
+--
+-- Alleen bij UPDATE, met opzet. Bij DELETE zou dezelfde controle het
+-- verwijderen van een groep blokkeren (memberships hangt er met cascade aan) en
+-- het opheffen van een account (profiles idem). Een beheerder die zijn eigen
+-- lidmaatschap weggooit is een bewuste daad die de app nergens aanbiedt; een
+-- account dat niet meer opgeheven kan worden is een echt probleem.
+--
+-- Draai na 010-eisen.sql.
+
+create or replace function keep_one_beheerder ()
+  returns trigger language plpgsql set search_path = public as $fn$
+begin
+  -- Alleen het wegnemen van een beheerdersrol is interessant.
+  if old.role <> 'beheerder' then
+    return new;
+  end if;
+  if new.role = 'beheerder' and new.group_id = old.group_id then
+    return new;
+  end if;
+
+  if not exists (
+    select 1 from memberships
+    where group_id = old.group_id
+      and role = 'beheerder'
+      and id <> old.id
+  ) then
+    raise exception
+      'Dit is de laatste beheerder van de groep. Maak eerst iemand anders beheerder.';
+  end if;
+
+  return new;
+end;
+$fn$;
+
+drop trigger if exists memberships_keep_one_beheerder on memberships;
+
+create trigger memberships_keep_one_beheerder
+  before update on memberships
+  for each row execute function keep_one_beheerder ();
+
+-- ============================================================ 012-onderdelen.sql
+
+-- aftekenboek — losse onderdelen binnen één eis
+--
+-- "Schiemanswerk" is één regel op de vorderingenstaat, maar er zitten zes
+-- knopen achter. Met één vinkje is niet bij te houden wie de paalsteek al kan
+-- en de mastworp nog niet, en dat is precies wat een instructeur tussen twee
+-- vaaravonden door kwijtraakt.
+--
+-- Een onderdeel is daarom gewoon een eis met een ouder. Dat betekent dat
+-- sign_offs, de policies en set_sign_off er niets van hoeven te weten: een
+-- onderdeel wordt afgetekend zoals alles hier wordt afgetekend, met een datum
+-- en een naam.
+--
+-- Wat een onderdeel níét doet, is de eis afstrepen. Alle zes de knopen gelegd
+-- is niet hetzelfde als "beheerst schiemanswerk"; die beoordeling blijft van de
+-- instructeur. Daarom tellen alleen eisen zonder ouder mee in de voortgang —
+-- het aantal eisen van een diploma blijft staan op wat het handboek zegt.
+--
+-- Draai na 011-laatste-beheerder.sql, en draai daarna 010-eisen.sql opnieuw om
+-- de onderdelen te laden.
+
+alter table requirements add column if not exists parent_id uuid;
+
+-- De samengestelde sleutel doet hier twee dingen tegelijk: hij wijst de ouder
+-- aan én dwingt af dat die bij hetzelfde diploma hoort. Een onderdeel van
+-- Kielboot I kan zo nooit onder een eis van Roeien III hangen.
+alter table requirements drop constraint if exists requirements_parent_same_diploma;
+alter table requirements
+  add constraint requirements_parent_same_diploma
+  foreign key (parent_id, diploma_id)
+  references requirements (id, diploma_id) on delete cascade;
+
+create index if not exists requirements_parent_id_idx on requirements (parent_id);
+
+-- De oude unieke sleutel ging uit van één laag. Nu tellen eisen door binnen hun
+-- diploma, en onderdelen binnen hun eis.
+alter table requirements drop constraint if exists requirements_diploma_id_kind_position_key;
+
+drop index if exists requirements_top_position;
+drop index if exists requirements_sub_position;
+
+create unique index requirements_top_position
+  on requirements (diploma_id, kind, position) where parent_id is null;
+
+create unique index requirements_sub_position
+  on requirements (parent_id, position) where parent_id is not null;
+
+-- Eén laag diep. Een onderdeel van een onderdeel is geen vorderingenstaat meer
+-- maar een boomstructuur, en daar is geen enkel scherm op gebouwd.
+create or replace function requirements_one_level ()
+  returns trigger language plpgsql set search_path = public as $fn$
+begin
+  if new.parent_id is not null and exists (
+    select 1 from requirements p
+    where p.id = new.parent_id and p.parent_id is not null
+  ) then
+    raise exception 'Een onderdeel kan zelf geen onderdelen hebben';
+  end if;
+  return new;
+end;
+$fn$;
+
+drop trigger if exists requirements_one_level on requirements;
+
+create trigger requirements_one_level
+  before insert or update on requirements
+  for each row execute function requirements_one_level ();
+
+-- ---------------------------------------------------------------- tellen
+--
+-- Overal waar voortgang geteld wordt, tellen alleen de eisen zelf mee.
+
+create or replace view enrollment_progress
+  with (security_invoker = true) as
+  select
+    e.id                                           as enrollment_id,
+    count(r.id) filter (where r.kind = 'praktijk') as praktijk_total,
+    count(s.id) filter (where r.kind = 'praktijk') as praktijk_done,
+    count(r.id) filter (where r.kind = 'theorie')  as theorie_total,
+    count(s.id) filter (where r.kind = 'theorie')  as theorie_done,
+    count(r.id)                                    as total,
+    count(s.id)                                    as done
+  from enrollments e
+  join requirements r on r.diploma_id = e.diploma_id and r.parent_id is null
+  left join sign_offs s
+    on s.enrollment_id = e.id and s.requirement_id = r.id
+  group by e.id;
+
+create or replace function member_enrollments (p_group uuid, p_profile uuid default null)
+  returns table (
+    enrollment_id    uuid,
+    profile_id       uuid,
+    full_name        text,
+    diploma_id       uuid,
+    diploma_code     text,
+    diploma_name     text,
+    level_label      text,
+    discipline_code  text,
+    discipline_name  text,
+    theory_valid_months int,
+    started_on       date,
+    theory_passed_on date,
+    awarded_on       date,
+    note             text,
+    praktijk_total   bigint,
+    praktijk_done    bigint,
+    theorie_total    bigint,
+    theorie_done     bigint
+  )
+  language sql stable security definer set search_path = public as $fn$
+  select
+    e.id, e.profile_id, p.full_name,
+    d.id, d.code, d.name, d.level_label,
+    disc.code, disc.name, d.theory_valid_months,
+    e.started_on, e.theory_passed_on, e.awarded_on, e.note,
+    count(r.id) filter (where r.kind = 'praktijk'),
+    count(s.id) filter (where r.kind = 'praktijk'),
+    count(r.id) filter (where r.kind = 'theorie'),
+    count(s.id) filter (where r.kind = 'theorie')
+  from enrollments e
+  join profiles p on p.id = e.profile_id
+  join diplomas d on d.id = e.diploma_id
+  join disciplines disc on disc.id = d.discipline_id
+  join requirements r on r.diploma_id = d.id and r.parent_id is null
+  left join sign_offs s on s.enrollment_id = e.id and s.requirement_id = r.id
+  where e.group_id = p_group
+    and e.profile_id = coalesce(p_profile, auth.uid())
+    and (is_staff(p_group) or coalesce(p_profile, auth.uid()) = auth.uid())
+    and is_member(p_group)
+  group by e.id, p.full_name, d.id, disc.id
+  order by e.awarded_on nulls first, disc.sort_order, d.sort_order;
+$fn$;
+
+-- ---------------------------------------------------------------- de lijst
+--
+-- De aftekenlijst geeft eisen én onderdelen terug; het scherm nestelt ze op
+-- parent_id. Onderdelen komen achter hun eigen eis te staan, zodat de app ze
+-- in volgorde kan doorlopen zonder te sorteren.
+
+drop function if exists enrollment_sheet (uuid);
+
+create or replace function enrollment_sheet (p_enrollment uuid)
+  returns table (
+    requirement_id uuid,
+    parent_id      uuid,
+    kind           requirement_kind,
+    "position"     int,
+    title          text,
+    detail         text,
+    signed_at      timestamptz,
+    signed_by      uuid,
+    signed_by_name text,
+    note           text
+  )
+  language sql stable security definer set search_path = public as $fn$
+  select
+    r.id, r.parent_id, r.kind, r.position, r.title, r.detail,
+    s.signed_at, s.signed_by, sp.full_name, s.note
+  from enrollments e
+  join requirements r on r.diploma_id = e.diploma_id
+  left join sign_offs s on s.enrollment_id = e.id and s.requirement_id = r.id
+  left join profiles sp on sp.id = s.signed_by
+  where e.id = p_enrollment
+    and (is_staff(e.group_id) or e.profile_id = auth.uid())
+  order by
+    r.kind,
+    coalesce((select p.position from requirements p where p.id = r.parent_id), r.position),
+    r.parent_id nulls first,
+    r.position;
+$fn$;
+
 -- ============================================================ 010-eisen.sql
 
 -- aftekenboek — de diploma's en hun eisen
@@ -1305,54 +1531,310 @@ on conflict (code) do update set
   title      = excluded.title,
   detail     = excluded.detail;
 
--- ============================================================ 011-laatste-beheerder.sql
-
--- aftekenboek — een groep raakt zijn laatste beheerder niet kwijt
+-- ---------------------------------------------------------------- onderdelen
 --
--- Het rollenscherm liet een beheerder zichzelf met één tik lid maken. Daarna
--- kan diezelfde persoon niets meer beheren — ook niet zijn eigen rol
--- terugzetten — en is er niemand anders die het kan. De enige uitweg is de SQL
--- Editor, en dat is geen uitweg voor een leidinggevende op een vaaravond.
+-- Eisen waar het handboek een opsomming achter zet: knopen, commando's,
+-- termen, onderdelen van de boot. Die worden hier losse regels onder hun eis,
+-- zodat een instructeur kan bijhouden dat de paalsteek zit en de mastworp nog
+-- niet. Ze tellen niet mee in de voortgang — zie 012-onderdelen.sql.
 --
--- Een waarschuwing in de app was er al en hielp niet, want de tik is precies
--- even makkelijk met of zonder waarschuwing. Dus staat de regel hier: wie de
--- laatste beheerder van een groep is, kan die rol niet verliezen.
+-- De code van een onderdeel is die van zijn eis plus het nummer, dus
+-- roeien-12.t1.3 is de derde knoop van Schiemanswerk bij Roeien I/II. Opnieuw
+-- draaien werkt bij op die code, net als bij de eisen zelf.
 --
--- Alleen bij UPDATE, met opzet. Bij DELETE zou dezelfde controle het
--- verwijderen van een groep blokkeren (memberships hangt er met cascade aan) en
--- het opheffen van een account (profiles idem). Een beheerder die zijn eigen
--- lidmaatschap weggooit is een bewuste daad die de app nergens aanbiedt; een
--- account dat niet meer opgeheven kan worden is een echt probleem.
---
--- Draai na 010-eisen.sql.
+-- Bewust níét uitgesplitst: de artikellijsten uit het Binnenvaartpolitie-
+-- reglement. Vanaf Roeien III en Kielboot III zijn dat er tientallen, en een
+-- scherm met tachtig vinkjes helpt niemand op een steiger. Die blijven één eis.
 
-create or replace function keep_one_beheerder ()
-  returns trigger language plpgsql set search_path = public as $fn$
-begin
-  -- Alleen het wegnemen van een beheerdersrol is interessant.
-  if old.role <> 'beheerder' then
-    return new;
-  end if;
-  if new.role = 'beheerder' and new.group_id = old.group_id then
-    return new;
-  end if;
+insert into requirements (diploma_id, parent_id, code, kind, position, title)
+select p.diploma_id, p.id, p.code || '.' || v.position, p.kind, v.position, v.title
+from (values
 
-  if not exists (
-    select 1 from memberships
-    where group_id = old.group_id
-      and role = 'beheerder'
-      and id <> old.id
-  ) then
-    raise exception
-      'Dit is de laatste beheerder van de groep. Maak eerst iemand anders beheerder.';
-  end if;
+-- ---- Roeien I/II
+('roeien-12.t1',  1, $$Twee halve steken, de eerste slippend$$),
+('roeien-12.t1',  2, $$Achtknoop$$),
+('roeien-12.t1',  3, $$Platte knoop$$),
+('roeien-12.t1',  4, $$Mastworp, met slipsteek als borg$$),
+('roeien-12.t1',  5, $$Een lijn opschieten$$),
+('roeien-12.t1',  6, $$Een lijn beleggen op een kikker$$),
 
-  return new;
-end;
-$fn$;
+('roeien-12.p3',  1, $$Dollen ... in$$),
+('roeien-12.p3',  2, $$Los ... voor en los ... achter$$),
+('roeien-12.p3',  3, $$Op ... riemen$$),
+('roeien-12.p3',  4, $$Haalt op ... gelijk$$),
+('roeien-12.p3',  5, $$Stopt ... af$$),
+('roeien-12.p3',  6, $$Strijkt ... gelijk$$),
+('roeien-12.p3',  7, $$Zet ... af$$),
+('roeien-12.p3',  8, $$Riemen ... lopen$$),
+('roeien-12.p3',  9, $$Riemen ... geroeid$$),
 
-drop trigger if exists memberships_keep_one_beheerder on memberships;
+('roeien-12.t2',  1, $$Slagroeier$$),
+('roeien-12.t2',  2, $$Boegroeier$$),
+('roeien-12.t2',  3, $$Midroeier$$),
+('roeien-12.t2',  4, $$Roerganger$$),
+('roeien-12.t2',  5, $$Haakvoor$$),
+('roeien-12.t2',  6, $$Stuurboord en bakboord$$),
+('roeien-12.t2',  7, $$Hogerwal en lagerwal$$),
+('roeien-12.t2',  8, $$Bomen$$),
+('roeien-12.t2',  9, $$Jagen$$),
+('roeien-12.t2', 10, $$Wrikken$$),
+('roeien-12.t2', 11, $$In de wind$$),
+('roeien-12.t2', 12, $$Opschieten$$),
+('roeien-12.t2', 13, $$Beleggen$$),
 
-create trigger memberships_keep_one_beheerder
-  before update on memberships
-  for each row execute function keep_one_beheerder ();
+('roeien-12.t3',  1, $$Boeg$$),
+('roeien-12.t3',  2, $$Hek$$),
+('roeien-12.t3',  3, $$Dolboord$$),
+('roeien-12.t3',  4, $$Doften$$),
+('roeien-12.t3',  5, $$Roer$$),
+('roeien-12.t3',  6, $$Helmstok$$),
+('roeien-12.t3',  7, $$Stuurboord en bakboord$$),
+('roeien-12.t3',  8, $$Roeiriem$$),
+('roeien-12.t3',  9, $$Wrikriem$$),
+
+-- ---- Roeien III
+('roeien-3.p3',   1, $$Riemen ... op$$),
+('roeien-3.p3',   2, $$Dollen ... in$$),
+('roeien-3.p3',   3, $$Dollen ... richten$$),
+('roeien-3.p3',   4, $$Riemen ... toe$$),
+('roeien-3.p3',   5, $$Los ... voor en los ... achter$$),
+('roeien-3.p3',   6, $$Op ... riemen$$),
+('roeien-3.p3',   7, $$Haalt op ... gelijk$$),
+('roeien-3.p3',   8, $$Stopt ... af$$),
+('roeien-3.p3',   9, $$Strijkt ... gelijk$$),
+('roeien-3.p3',  10, $$Zet ... af$$),
+('roeien-3.p3',  11, $$Riemen ... lopen$$),
+('roeien-3.p3',  12, $$Riemen ... over$$),
+('roeien-3.p3',  13, $$Riemen ... geroeid$$),
+('roeien-3.p3',  14, $$Stootwillen ... binnen of ... buiten$$),
+
+('roeien-3.p19',  1, $$Twee halve steken, de eerste slippend$$),
+('roeien-3.p19',  2, $$Achtknoop$$),
+('roeien-3.p19',  3, $$Platte knoop$$),
+('roeien-3.p19',  4, $$Mastworp, met slipsteek als borg$$),
+('roeien-3.p19',  5, $$Schootsteek (enkel)$$),
+('roeien-3.p19',  6, $$Paalsteek$$),
+('roeien-3.p19',  7, $$Een lijn opschieten$$),
+('roeien-3.p19',  8, $$Een lijn beleggen op een kikker$$),
+
+('roeien-3.t1',   1, $$Twee halve steken, de eerste slippend$$),
+('roeien-3.t1',   2, $$Achtknoop$$),
+('roeien-3.t1',   3, $$Platte knoop$$),
+('roeien-3.t1',   4, $$Mastworp, met slipsteek als borg$$),
+('roeien-3.t1',   5, $$Schootsteek (enkel)$$),
+('roeien-3.t1',   6, $$Paalsteek$$),
+('roeien-3.t1',   7, $$Een lijn opschieten en beleggen op een kikker$$),
+('roeien-3.t1',   8, $$Schavielen en de maatregelen daartegen$$),
+
+('roeien-3.t2',   1, $$Slagroeier$$),
+('roeien-3.t2',   2, $$Boegroeier$$),
+('roeien-3.t2',   3, $$Roerganger$$),
+('roeien-3.t2',   4, $$Haakvoor$$),
+('roeien-3.t2',   5, $$Stuurboord en bakboord$$),
+('roeien-3.t2',   6, $$Hogerwal en lagerwal$$),
+('roeien-3.t2',   7, $$Loef en lij$$),
+('roeien-3.t2',   8, $$Bomen$$),
+('roeien-3.t2',   9, $$Jagen$$),
+('roeien-3.t2',  10, $$Wrikken$$),
+('roeien-3.t2',  11, $$In de wind$$),
+('roeien-3.t2',  12, $$Opschieten$$),
+('roeien-3.t2',  13, $$Beleggen$$),
+
+('roeien-3.t3',   1, $$Boeg$$),
+('roeien-3.t3',   2, $$Hek$$),
+('roeien-3.t3',   3, $$Spiegel$$),
+('roeien-3.t3',   4, $$Dolboord$$),
+('roeien-3.t3',   5, $$Doften$$),
+('roeien-3.t3',   6, $$Roer$$),
+('roeien-3.t3',   7, $$Helmstok$$),
+('roeien-3.t3',   8, $$Stuurboord en bakboord$$),
+('roeien-3.t3',   9, $$Roeiriem$$),
+('roeien-3.t3',  10, $$Wrikriem$$),
+('roeien-3.t3',  11, $$Blad$$),
+('roeien-3.t3',  12, $$Handvat$$),
+('roeien-3.t3',  13, $$Dollen$$),
+('roeien-3.t3',  14, $$Dolpot$$),
+('roeien-3.t3',  15, $$Landvast$$),
+('roeien-3.t3',  16, $$Hoosvat$$),
+
+-- ---- Kielboot I
+('kielboot-1.p6',  1, $$Klaar om te wenden$$),
+('kielboot-1.p6',  2, $$Ree$$),
+('kielboot-1.p6',  3, $$Fok bak$$),
+('kielboot-1.p6',  4, $$Fok over$$),
+('kielboot-1.p6',  5, $$Fok aan$$),
+
+('kielboot-1.t1',  1, $$Achtknoop$$),
+('kielboot-1.t1',  2, $$Twee halve steken, de eerste slippend$$),
+('kielboot-1.t1',  3, $$Paalsteek$$),
+('kielboot-1.t1',  4, $$Reefsteek (platte knoop)$$),
+('kielboot-1.t1',  5, $$Beleggen op klamp, nagel of kikker$$),
+('kielboot-1.t1',  6, $$Een tros opschieten$$),
+
+('kielboot-1.t2',  1, $$Hogerwal en lagerwal$$),
+('kielboot-1.t2',  2, $$Bakboord en stuurboord$$),
+('kielboot-1.t2',  3, $$Hoge en lage zijde$$),
+('kielboot-1.t2',  4, $$Loef- en lijzijde$$),
+('kielboot-1.t2',  5, $$In de wind$$),
+('kielboot-1.t2',  6, $$Aan de wind$$),
+('kielboot-1.t2',  7, $$Halve wind$$),
+('kielboot-1.t2',  8, $$Ruime wind$$),
+('kielboot-1.t2',  9, $$Voor de wind$$),
+('kielboot-1.t2', 10, $$Oploeven$$),
+('kielboot-1.t2', 11, $$Afvallen$$),
+('kielboot-1.t2', 12, $$Overstag gaan$$),
+('kielboot-1.t2', 13, $$Gijpen$$),
+('kielboot-1.t2', 14, $$Kruisrak$$),
+('kielboot-1.t2', 15, $$Killen van het zeil$$),
+
+-- ---- Kielboot II
+('kielboot-2.p6',  1, $$Klaar om te wenden$$),
+('kielboot-2.p6',  2, $$Ree$$),
+('kielboot-2.p6',  3, $$Fok bak$$),
+('kielboot-2.p6',  4, $$Fok over$$),
+('kielboot-2.p6',  5, $$Fok aan$$),
+
+('kielboot-2.t1',  1, $$Twee halve steken, de eerste slippend$$),
+('kielboot-2.t1',  2, $$Achtknoop$$),
+('kielboot-2.t1',  3, $$Paalsteek$$),
+('kielboot-2.t1',  4, $$Platte knoop$$),
+('kielboot-2.t1',  5, $$Mastworp, met slipsteek als borg$$),
+('kielboot-2.t1',  6, $$Schootsteek (enkel)$$),
+('kielboot-2.t1',  7, $$Een lijn opschieten$$),
+('kielboot-2.t1',  8, $$Beleggen op een kikker$$),
+
+('kielboot-2.t2',  1, $$De zeiltermen van Kielboot I$$),
+('kielboot-2.t2',  2, $$Deinzen$$),
+('kielboot-2.t2',  3, $$Opschieten$$),
+('kielboot-2.t2',  4, $$Beleggen$$),
+
+('kielboot-2.t3',  1, $$Blok$$),
+('kielboot-2.t3',  2, $$Landvast$$),
+('kielboot-2.t3',  3, $$Kiel$$),
+('kielboot-2.t3',  4, $$Helmstok$$),
+('kielboot-2.t3',  5, $$Roer$$),
+('kielboot-2.t3',  6, $$Mast$$),
+('kielboot-2.t3',  7, $$Giek$$),
+('kielboot-2.t3',  8, $$Val$$),
+('kielboot-2.t3',  9, $$Schoot$$),
+('kielboot-2.t3', 10, $$Halshoek$$),
+('kielboot-2.t3', 11, $$Schoothoek$$),
+('kielboot-2.t3', 12, $$Grootzeil$$),
+('kielboot-2.t3', 13, $$Fok$$),
+
+-- ---- Kielboot III
+('kielboot-3.p18', 1, $$Twee halve steken$$),
+('kielboot-3.p18', 2, $$Slipsteek$$),
+('kielboot-3.p18', 3, $$Achtknoop$$),
+('kielboot-3.p18', 4, $$Platte knoop$$),
+('kielboot-3.p18', 5, $$Schootsteek, enkel en dubbel$$),
+('kielboot-3.p18', 6, $$Mastworp, op twee manieren$$),
+('kielboot-3.p18', 7, $$Paalsteek$$),
+('kielboot-3.p18', 8, $$Een tros opschieten$$),
+('kielboot-3.p18', 9, $$Tros beleggen op een bolder$$),
+('kielboot-3.p18', 10, $$Lijn beleggen op een klamp of nagel$$),
+
+('kielboot-3.t1',  1, $$Twee halve steken, de eerste slippend$$),
+('kielboot-3.t1',  2, $$Achtknoop$$),
+('kielboot-3.t1',  3, $$Paalsteek$$),
+('kielboot-3.t1',  4, $$Platte knoop$$),
+('kielboot-3.t1',  5, $$Mastworp, op twee manieren$$),
+('kielboot-3.t1',  6, $$Schootsteek, enkel en dubbel$$),
+('kielboot-3.t1',  7, $$Opschieten en beleggen, op kikker en bolder$$),
+('kielboot-3.t1',  8, $$Verschil tussen geslagen en gevlochten touwwerk$$),
+('kielboot-3.t1',  9, $$Welk touw waarvoor: landvast, val, schoot, sleeplijn, ankerlijn$$),
+('kielboot-3.t1', 10, $$Schavielen en de maatregelen daartegen$$),
+
+('kielboot-3.t2',  1, $$De zeiltermen van Kielboot II$$),
+('kielboot-3.t2',  2, $$Bovenlangs en onderlangs$$),
+('kielboot-3.t2',  3, $$Dwarspeiling$$),
+('kielboot-3.t2',  4, $$Bezeild$$),
+('kielboot-3.t2',  5, $$Binnen de wind$$),
+('kielboot-3.t2',  6, $$Korte slag en lange slag$$),
+('kielboot-3.t2',  7, $$Opschieter$$),
+('kielboot-3.t2',  8, $$Zuigen en duiken$$),
+('kielboot-3.t2',  9, $$Planeren$$),
+('kielboot-3.t2', 10, $$Volvallen$$),
+('kielboot-3.t2', 11, $$Verhalen$$),
+('kielboot-3.t2', 12, $$Verlijeren en drift$$),
+('kielboot-3.t2', 13, $$Bijliggen$$),
+('kielboot-3.t2', 14, $$Bakhouden$$),
+
+('kielboot-3.t3',  1, $$Voorsteven$$),
+('kielboot-3.t3',  2, $$Spiegel$$),
+('kielboot-3.t3',  3, $$Sluiting en kous$$),
+('kielboot-3.t3',  4, $$Blok$$),
+('kielboot-3.t3',  5, $$Stootkussen$$),
+('kielboot-3.t3',  6, $$Hoosvat$$),
+('kielboot-3.t3',  7, $$Landvast$$),
+('kielboot-3.t3',  8, $$Kiel$$),
+('kielboot-3.t3',  9, $$Helmstok$$),
+('kielboot-3.t3', 10, $$Roer en roerblad$$),
+('kielboot-3.t3', 11, $$Mast$$),
+('kielboot-3.t3', 12, $$Giek$$),
+('kielboot-3.t3', 13, $$Val$$),
+('kielboot-3.t3', 14, $$Halstalie$$),
+('kielboot-3.t3', 15, $$Schoot$$),
+('kielboot-3.t3', 16, $$Voorlijk, achterlijk en onderlijk$$),
+('kielboot-3.t3', 17, $$Halshoek en schoothoek$$),
+('kielboot-3.t3', 18, $$Grootzeil$$),
+('kielboot-3.t3', 19, $$Fok$$),
+
+-- ---- Kielboot IV
+('kielboot-4.p20', 1, $$De knopen en steken van Kielboot III$$),
+('kielboot-4.p20', 2, $$Splits in driestrengs touwwerk$$),
+('kielboot-4.p20', 3, $$Benaaide takeling$$),
+
+('kielboot-4.t11', 1, $$Schacht$$),
+('kielboot-4.t11', 2, $$Stok$$),
+('kielboot-4.t11', 3, $$Kruis$$),
+('kielboot-4.t11', 4, $$Armen en vloeien$$),
+('kielboot-4.t11', 5, $$Verschil lichtgewicht- en volgewichtanker$$),
+('kielboot-4.t11', 6, $$Hollands stokanker$$),
+('kielboot-4.t11', 7, $$Dreg en klapdreg$$),
+('kielboot-4.t11', 8, $$Danforth-anker$$),
+('kielboot-4.t11', 9, $$Ploegschaaranker$$),
+
+-- ---- Buitenboordmotor I/II
+('bbm-12.p15', 1, $$Platte knoop$$),
+('bbm-12.p15', 2, $$Paalsteek$$),
+('bbm-12.p15', 3, $$Halve steek$$),
+('bbm-12.p15', 4, $$Mastworp$$),
+('bbm-12.p15', 5, $$Een lijn opschieten$$),
+('bbm-12.p15', 6, $$Beleggen op een kikker of bolder$$),
+
+('bbm-12.t1',  1, $$Boeg$$),
+('bbm-12.t1',  2, $$Stuurboord en bakboord$$),
+('bbm-12.t1',  3, $$Steven$$),
+('bbm-12.t1',  4, $$Spanten$$),
+('bbm-12.t1',  5, $$Spiegel$$),
+('bbm-12.t1',  6, $$Motorsteun$$),
+('bbm-12.t1',  7, $$Vrijboord$$),
+('bbm-12.t1',  8, $$Bougie$$),
+('bbm-12.t1',  9, $$Brandstofslang$$),
+('bbm-12.t1', 10, $$Carburator$$),
+('bbm-12.t1', 11, $$Koelwateruitlaat$$),
+('bbm-12.t1', 12, $$Gas- en chokehandel$$),
+
+-- ---- Buitenboordmotor III
+('bbm-3.t1',   1, $$De onderdelen van Buitenboordmotor I/II$$),
+('bbm-3.t1',   2, $$Bougie$$),
+('bbm-3.t1',   3, $$Brandstofleiding$$),
+('bbm-3.t1',   4, $$Koelwateruitlaat$$),
+('bbm-3.t1',   5, $$Breekpen$$),
+('bbm-3.t1',   6, $$Gas- en chokehandel$$),
+('bbm-3.t1',   7, $$Startkoord$$),
+
+('bbm-3.p14',  1, $$Bougie schoonmaken en afstellen$$),
+('bbm-3.p14',  2, $$Breekpen vervangen$$),
+('bbm-3.p14',  3, $$Brandstofleiding controleren$$),
+('bbm-3.p14',  4, $$Koelwaterproblemen oplossen$$)
+
+) as v(parent, position, title)
+join requirements p on p.code = v.parent
+on conflict (code) do update set
+  diploma_id = excluded.diploma_id,
+  parent_id  = excluded.parent_id,
+  kind       = excluded.kind,
+  position   = excluded.position,
+  title      = excluded.title;
