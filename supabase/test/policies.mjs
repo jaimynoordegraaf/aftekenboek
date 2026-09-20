@@ -91,6 +91,7 @@ async function main() {
     '012-onderdelen.sql',
     '013-beheer.sql',
     '014-speltakken.sql',
+    '015-leden-zonder-account.sql',
     '010-eisen.sql',
   ]) {
     try {
@@ -497,6 +498,63 @@ async function main() {
   const diplomaCount = await one('select count(*)::int as n from diplomas');
   check('en een lid kan er geen diploma bij zetten', diplomaCount.n === 12,
     `${diplomaCount.n}`);
+
+  section('Leden zonder account');
+
+  // De kern: iemand in het register zetten die zich nooit zal aanmelden.
+  const pietId = await as(wim, async () => {
+    const r = await db.query('select add_member($1, $2) as id', [jwf, 'Piet Zonder Telefoon']);
+    return r.rows[0].id;
+  });
+  check('een instructeur voegt iemand zonder account toe', Boolean(pietId));
+
+  const piet = await one(`select id, full_name from profiles where id = '${pietId}'`);
+  check('hij staat in het register', piet.full_name === 'Piet Zonder Telefoon');
+
+  const noAuth = await one(
+    `select count(*)::int as n from auth.users where id = '${pietId}'`,
+  );
+  check('en heeft geen account', noAuth.n === 0, `${noAuth.n}`);
+
+  const inList = await as(wim, async () => {
+    const r = await db.query('select * from group_members($1)', [jwf]);
+    return r.rows.some((m) => m.full_name === 'Piet Zonder Telefoon');
+  });
+  check('hij staat in de ledenlijst', inList);
+
+  // Waar het om begonnen was: hij moet een opleiding kunnen krijgen.
+  const pietEnrollment = await as(wim, async () => {
+    const r = await db.query(
+      `insert into enrollments (group_id, profile_id, diploma_id, created_by)
+       values ($1, $2, $3, $4) returning id`,
+      [jwf, pietId, roeien12, wim],
+    );
+    return r.rows[0].id;
+  });
+  await as(wim, () =>
+    db.query(`select set_sign_off($1, $2, true, null)`, [pietEnrollment, eis1]),
+  );
+  const pietProgress = await as(wim, async () => {
+    const r = await db.query('select * from member_enrollments($1, $2)', [jwf, pietId]);
+    return r.rows[0];
+  });
+  check('en kan afgetekend worden als ieder ander',
+    Number(pietProgress.praktijk_done) === 1, `${pietProgress?.praktijk_done}`);
+
+  await as(wim, () =>
+    db.query('select set_member_name($1, $2, $3)', [jwf, pietId, 'Piet de Vries']),
+  );
+  const renamed = await one(`select full_name from profiles where id = '${pietId}'`);
+  check('een instructeur corrigeert zijn naam', renamed.full_name === 'Piet de Vries',
+    renamed.full_name);
+
+  const byOutsider = await refused(ander, 'select add_member($1, $2)', [jwf, 'Indringer']);
+  check('iemand van buiten voegt niets toe', byOutsider !== null, 'het lukte wel');
+
+  const renameByLid = await refused(sam, 'select set_member_name($1, $2, $3)', [
+    jwf, pietId, 'Gehackt',
+  ]);
+  check('een lid hernoemt niemand', renameByLid !== null, 'het lukte wel');
 
   section('Speltakken');
 
