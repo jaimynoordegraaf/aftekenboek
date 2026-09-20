@@ -17,6 +17,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { radius, space, type as typeScale } from '@/theme';
+import { errorMessage } from '@/lib/errors';
 import { useTheme } from '@/lib/use-theme';
 
 // ---------------------------------------------------------------- text
@@ -505,7 +506,7 @@ export function Empty({ title, body }: { title: string; body?: string }) {
 export function ErrorNote({ error }: { error: unknown }) {
   const t = useTheme();
   if (!error) return null;
-  const message = error instanceof Error ? error.message : String(error);
+  const message = errorMessage(error);
   return (
     <View
       style={{

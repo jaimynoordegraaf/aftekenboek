@@ -10,6 +10,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 
+import { errorMessage } from './errors';
 import { db, isConfigured, supabase } from './supabase';
 import {
   STAFF_ROLES,
@@ -93,7 +94,7 @@ export const useSession = create<State & Actions>((set, get) => ({
       set({ profile, memberships, activeGroupId: active, error: null });
       set({ sections: active ? await fetchSections(active) : [] });
     } catch (e) {
-      set({ error: e instanceof Error ? e.message : String(e) });
+      set({ error: errorMessage(e) });
     }
   },
 

@@ -89,7 +89,11 @@ export async function fetchEnrollment(enrollmentId: string): Promise<EnrollmentD
   const { data, error } = await db()
     .from('enrollments')
     .select(
-      'id, group_id, profile_id, started_on, theory_passed_on, awarded_on, note, profiles(id, full_name), diplomas(*, disciplines(*))',
+      // profiles!profile_id is geen omhaal: enrollments wijst op twee manieren
+      // naar profiles — profile_id (de kandidaat) en created_by (wie hem
+      // inschreef). Zonder die hint weigert PostgREST de embed, omdat het niet
+      // kan raden welke van de twee bedoeld is. Laat hem staan.
+      'id, group_id, profile_id, started_on, theory_passed_on, awarded_on, note, profiles!profile_id(id, full_name), diplomas(*, disciplines(*))',
     )
     .eq('id', enrollmentId)
     .single();
