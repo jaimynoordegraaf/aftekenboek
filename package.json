@@ -13,7 +13,8 @@
     "test:db": "node supabase/test/policies.mjs",
     "export:android": "expo export --platform android",
     "export:ios": "expo export --platform ios",
-    "admin": "node admin/serve.mjs"
+    "admin": "node admin/serve.mjs",
+    "admin:build": "node admin/build.mjs"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

@@ -75,6 +75,27 @@ Wat je in de catalogus verandert geldt voor elke groep in die database, en wordt
 overschreven als je `supabase/010-eisen.sql` opnieuw draait. Blijvende
 correcties horen dus ook in dat bestand — zie [docs/EISEN.md](docs/EISEN.md).
 
+### Op een website zetten
+
+```bash
+npm run admin:build
+```
+
+Zet `dist-admin/` klaar: de pagina, een `config.js` met de gegevens uit `.env`,
+een `.htaccess` en een LEESMIJ. Upload de inhoud naar een submap van je site
+(`/beheer/`) met FTP of de bestandsbeheerder — niet via de mediabibliotheek van
+WordPress, die weigert `.html` en haalt de pagina door zijn eigen templates.
+
+Moet over https, want je typt er een wachtwoord in. De sleutel in `config.js` is
+de publishable key en mag openbaar zijn: die zit al in elke app op elke telefoon,
+en wat de gegevens beschermt is row level security. De `sb_secret_`-sleutel hoort
+er nooit in, en `admin:build` weigert hem.
+
+Gehost is de pagina voor iedereen bereikbaar. Inloggen blijft nodig en de
+policies laten een vreemde niets doen, maar je zet wel een beheerscherm in de
+etalage. Voor een paar beheerders is lokaal draaien rustiger; hosten is de moeite
+zodra er iemand bij moet vanaf een laptop zonder Node.
+
 ## Controles
 
 ```bash
