@@ -19,24 +19,41 @@ gewijzigd worden.
 Samen 12 diploma's en ruim 250 eisen, elk met het nummer dat hij in het handboek
 heeft, zodat de lijst op het scherm en het boekje in je hand gelijk oplopen.
 
+## Toelichtingen
+
+Bij elke eis van de acht diploma's voor roeien, kielboot en buitenboordmotor
+staat de toelichting uit het handboek: welke knopen, hoe de acht gevaren wordt,
+wat er bij een man-over-boordmanoeuvre in welke volgorde gebeurt. Ze zijn
+ingekort — het handboek is uitvoeriger dan wat je op een steiger leest — maar
+volgen de tekst op de voet.
+
+Twee dingen zijn samengevat in plaats van uitgeschreven:
+
+- **De BPR-artikellijsten.** Vanaf Roeien III en Kielboot III somt het handboek
+  tientallen artikelen, bijlagen en verkeerstekens op. In de app staat waar het
+  over gaat; voor de volledige opsomming blijft het handboek nodig.
+- **Eisen die letterlijk gelijk zijn aan een lager niveau** verwijzen daarnaar
+  ("als bij Kielboot III") en noemen daarna wat er bij dat niveau bij komt.
+
 ## Wat je nog moet nakijken
 
-Twee dingen zijn bewust onaf, en allebei op de veilige kant:
+**Sloep en motorvlet.** Dat handboek heeft geen toelichting per eis — alleen
+beoordelingsrichtlijnen — dus daar staat bij de praktijkeisen het
+handboek-onderdeel waar ze onder vallen (Havenmanoeuvres, Navigatie,
+Noodsituaties, …) en verder niets.
 
-1. **Toelichtingen.** Alleen Roeien I/II heeft bij elke eis de toelichting uit
-   het handboek staan ("welke knopen", "hoe wordt de acht gevaren"). Bij de
-   andere diploma's staat de titel van de eis er wel, de toelichting nog niet.
-   Aftekenen kan gewoon; de toelichting is naslag.
-
-2. **Sloep en motorvlet.** Het handboek zet die eisen niet per niveau onder
-   elkaar maar in één matrix met een kolom per niveau, en die kolommen zijn uit
-   de PDF niet betrouwbaar te lezen. Daarom staat bij alle vier de niveaus
-   dezelfde volledige lijst. Dat is met opzet de ruime kant: een eis die er niet
-   bij hoort zie je staan en haal je weg, een eis die ontbreekt zie je nooit.
-   Loop deze lijst één keer met het handboek ernaast na.
+Belangrijker: het handboek zet die eisen niet per niveau onder elkaar maar in
+één matrix met een kolom per niveau, en die kolommen zijn uit de PDF niet
+betrouwbaar te lezen. Daarom staat bij alle vier de niveaus dezelfde volledige
+lijst. Dat is met opzet de ruime kant: een eis die er niet bij hoort zie je staan
+en haal je weg, een eis die ontbreekt zie je nooit. Loop deze lijst één keer met
+het handboek ernaast na.
 
 Waar het handboek zelf al aangeeft dat iets pas vanaf een bepaald niveau geldt
 (nachtvaren, slepen, Klein Vaarbewijs) staat dat in de toelichting van die eis.
+
+`npm run test:db` bewaakt dit: elke eis buiten sloep/motorvlet moet een
+toelichting hebben, anders faalt de test met de diplomacodes erbij.
 
 ## Hoe je iets wijzigt
 

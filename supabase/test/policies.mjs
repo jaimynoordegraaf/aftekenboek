@@ -146,12 +146,30 @@ async function main() {
   check('Roeien I/II: 9 praktijk, 8 theorie', roeien.p === 9 && roeien.t === 8,
     `${roeien.p}/${roeien.t}`);
 
-  const details = await one(`
+  // Every diploma whose handboek carries a "toelichting op de eisen" should
+  // have one on every eis. Sloep/motorvlet is the exception: that handboek has
+  // no per-eis toelichting at all, only beoordelingsrichtlijnen.
+  const missing = await db.query(`
+    select d.code, count(*)::int as n
+    from requirements r
+    join diplomas d on d.id = r.diploma_id
+    where r.detail is null and d.code not like 'sloep-%'
+    group by d.code
+    order by d.code
+  `);
+  check(
+    'elke eis met een handboek-toelichting heeft er een',
+    missing.rows.length === 0,
+    missing.rows.map((r) => `${r.code}: ${r.n} zonder`).join(', '),
+  );
+
+  const sloepGrouped = await one(`
     select count(*)::int as n from requirements r
     join diplomas d on d.id = r.diploma_id
-    where d.code = 'roeien-12' and r.detail is not null
+    where d.code = 'sloep-1' and r.kind = 'praktijk' and r.detail is not null
   `);
-  check('Roeien I/II heeft overal een toelichting', details.n === 17, `${details.n}`);
+  check('sloep-praktijk draagt het handboek-onderdeel', sloepGrouped.n === 33,
+    `${sloepGrouped.n}`);
 
   section('De seed kan opnieuw');
 
