@@ -294,7 +294,15 @@ document.getElementById('signin-btn').addEventListener('click', async () => {
       return;
     }
     const { data, error } = await db.auth.signUp({
-      email, password, options: { data: { full_name: naam } },
+      email,
+      password,
+      options: {
+        data: { full_name: naam },
+        // Anders gebruikt Supabase de Site URL uit het dashboard, en die staat
+        // standaard op localhost:3000. Dit stuurt de bevestigingslink terug naar
+        // deze pagina, waar hij ook vandaan kwam — lokaal of gehost, allebei goed.
+        emailRedirectTo: location.href.split('#')[0].split('?')[0],
+      },
     });
     if (error) {
       box.textContent = message(error);

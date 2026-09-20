@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, View } from 'react-native';
+import * as Linking from 'expo-linking';
 
 import { Button, ErrorNote, Field, PlainScreen, Txt } from '@/components/ui';
 import { useSession } from '@/lib/session';
@@ -27,7 +28,14 @@ export default function SignIn() {
         const { data, error: signUpError } = await db().auth.signUp({
           email: email.trim(),
           password,
-          options: { data: { full_name: name.trim() } },
+          options: {
+            data: { full_name: name.trim() },
+            // Zonder dit gebruikt Supabase de Site URL uit het dashboard, en
+            // die staat standaard op localhost:3000 — de bevestigingslink komt
+            // dan uit bij een adres dat op niemands telefoon bestaat. Dit stuurt
+            // hem terug naar de app zelf.
+            emailRedirectTo: Linking.createURL('/'),
+          },
         });
         if (signUpError) throw signUpError;
         if (!data.session) {
