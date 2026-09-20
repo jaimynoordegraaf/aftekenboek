@@ -86,13 +86,40 @@
 <div id="signin">
   <div class="card">
     <h2>Aftekenboek</h2>
-    <p class="dim">Beheerpagina. Log in met je beheerdersaccount.</p>
+    <p class="dim" id="signin-lead">Beheerpagina. Log in met je account.</p>
+
+    <div id="name-row" class="hidden" style="margin-top:12px"><label for="name">Naam</label>
+      <input id="name" type="text" autocomplete="name" placeholder="Voor- en achternaam"></div>
     <div style="margin-top:12px"><label for="email">E-mailadres</label>
       <input id="email" type="email" autocomplete="username"></div>
     <div style="margin-top:12px"><label for="password">Wachtwoord</label>
       <input id="password" type="password" autocomplete="current-password"></div>
+
     <div id="signin-error" class="note err hidden" style="margin-top:12px"></div>
+    <div id="signin-ok" class="note ok hidden" style="margin-top:12px"></div>
+
     <button class="btn" id="signin-btn" style="margin-top:16px; width:100%">Inloggen</button>
+    <button class="btn ghost" id="mode-btn" style="margin-top:8px; width:100%">
+      Nog geen account? Maak er een
+    </button>
+  </div>
+</div>
+
+<!-- Wie is ingelogd maar nog nergens bij hoort. Een account op zichzelf geeft
+     nergens toegang toe; de code doet dat. -->
+<div id="join" class="hidden">
+  <div class="card">
+    <h2>Code invullen</h2>
+    <p class="dim">
+      Je account staat klaar. Vul de code van zes tekens in die je van je groep
+      kreeg, dan hoor je erbij.
+    </p>
+    <div style="margin-top:12px"><label for="code">Code</label>
+      <input id="code" type="text" maxlength="8" autocapitalize="characters"
+             style="font-size:22px; letter-spacing:4px; text-align:center"></div>
+    <div id="join-error" class="note err hidden" style="margin-top:12px"></div>
+    <button class="btn" id="join-btn" style="margin-top:16px; width:100%">Aanmelden bij groep</button>
+    <button class="btn ghost" id="join-signout" style="margin-top:8px; width:100%">Uitloggen</button>
   </div>
 </div>
 
@@ -220,24 +247,101 @@ function sectionsOf(group) {
 
 // ---------------------------------------------------------------- inloggen
 
+/** 'in' = inloggen, 'up' = account maken. */
+let authMode = 'in';
+
+function paintAuthMode() {
+  const up = authMode === 'up';
+  document.getElementById('name-row').classList.toggle('hidden', !up);
+  document.getElementById('signin-lead').textContent = up
+    ? 'Maak een account. Daarna vul je de code in die je van je groep kreeg.'
+    : 'Beheerpagina. Log in met je account.';
+  document.getElementById('signin-btn').textContent = up ? 'Account maken' : 'Inloggen';
+  document.getElementById('mode-btn').textContent = up
+    ? 'Ik heb al een account'
+    : 'Nog geen account? Maak er een';
+  document.getElementById('password').setAttribute(
+    'autocomplete', up ? 'new-password' : 'current-password');
+  document.getElementById('signin-error').classList.add('hidden');
+  document.getElementById('signin-ok').classList.add('hidden');
+}
+
+document.getElementById('mode-btn').addEventListener('click', () => {
+  authMode = authMode === 'in' ? 'up' : 'in';
+  paintAuthMode();
+});
+
 document.getElementById('signin-btn').addEventListener('click', async () => {
   const box = document.getElementById('signin-error');
+  const okBox = document.getElementById('signin-ok');
   box.classList.add('hidden');
+  okBox.classList.add('hidden');
+
   if (!db) {
     box.textContent = 'Geen verbinding ingesteld. Draai deze pagina via "npm run admin", dan leest hij de .env van het project.';
     box.classList.remove('hidden');
     return;
   }
-  const { error } = await db.auth.signInWithPassword({
-    email: document.getElementById('email').value.trim(),
-    password: document.getElementById('password').value,
-  });
-  if (error) {
-    box.textContent = message(error);
+
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+
+  if (authMode === 'up') {
+    const naam = document.getElementById('name').value.trim();
+    if (naam.length < 2) {
+      box.textContent = 'Vul je naam in.';
+      box.classList.remove('hidden');
+      return;
+    }
+    const { data, error } = await db.auth.signUp({
+      email, password, options: { data: { full_name: naam } },
+    });
+    if (error) {
+      box.textContent = message(error);
+      box.classList.remove('hidden');
+      return;
+    }
+    // Staat "bevestig je e-mailadres" aan in Supabase, dan is er nog geen
+    // sessie en moet er eerst een mailtje beantwoord worden.
+    if (!data.session) {
+      okBox.textContent = 'Je account is aangemaakt. Bevestig je e-mailadres en log daarna in.';
+      okBox.classList.remove('hidden');
+      authMode = 'in';
+      paintAuthMode();
+      okBox.classList.remove('hidden');
+      return;
+    }
+  } else {
+    const { error } = await db.auth.signInWithPassword({ email, password });
+    if (error) {
+      box.textContent = message(error);
+      box.classList.remove('hidden');
+      return;
+    }
+  }
+
+  await start();
+});
+
+document.getElementById('join-btn').addEventListener('click', async () => {
+  const box = document.getElementById('join-error');
+  box.classList.add('hidden');
+  try {
+    check(await db.rpc('redeem_invite', {
+      p_code: document.getElementById('code').value.trim().toUpperCase(),
+    }));
+  } catch (e) {
+    box.textContent = message(e);
     box.classList.remove('hidden');
     return;
   }
+  document.getElementById('join').classList.add('hidden');
   await start();
+});
+
+document.getElementById('join-signout').addEventListener('click', async () => {
+  await db.auth.signOut();
+  location.reload();
 });
 
 document.getElementById('signout').addEventListener('click', async () => {
@@ -270,12 +374,29 @@ async function start() {
       .select('group_id, role, groups(id, name)')
       .eq('profile_id', user.id),
   );
-  const admin = rows.find((r) => r.role === 'beheerder');
-  if (!admin) {
-    document.getElementById('signin').innerHTML =
-      '<div class="card"><h2>Geen beheerder</h2><p class="dim">Dit account is geen beheerder van een groep. Vraag een beheerder om je die rol te geven, of gebruik de app.</p></div>';
+  // Drie situaties, en ze lopen makkelijk door elkaar: nergens bij horen,
+  // ergens bij horen maar geen beheerder zijn, en beheerder zijn.
+  document.getElementById('signin').classList.add('hidden');
+
+  if (rows.length === 0) {
+    document.getElementById('join').classList.remove('hidden');
     return;
   }
+
+  const admin = rows.find((r) => r.role === 'beheerder');
+  if (!admin) {
+    const waar = rows[0].groups?.name ?? 'je groep';
+    document.getElementById('join').classList.add('hidden');
+    document.getElementById('signin').classList.remove('hidden');
+    document.getElementById('signin').innerHTML =
+      `<div class="card"><h2>Je zit erin</h2>` +
+      `<p class="dim">Je account hoort bij ${waar}. Deze beheerpagina is voor beheerders; ` +
+      `voor aftekenen en leden toevoegen gebruik je de app.</p>` +
+      `<p class="dim">Moet je hier wél bij kunnen, vraag een beheerder om je die rol te geven.</p></div>`;
+    return;
+  }
+
+  document.getElementById('join').classList.add('hidden');
   group = { id: admin.groups.id, name: admin.groups.name };
 
   document.getElementById('signin').classList.add('hidden');
@@ -714,6 +835,7 @@ function nieuweEis(diplomaId, kind, position) {
 }
 
 // ---------------------------------------------------------------- start
+paintAuthMode();
 if (db) {
   db.auth.getSession().then(({ data }) => { if (data.session) start(); });
 } else {
