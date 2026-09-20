@@ -80,7 +80,13 @@ async function main() {
   `);
   check('auth-stub staat', true);
 
-  for (const file of ['001-core.sql', '002-rls.sql', '003-rpc.sql', '010-eisen.sql']) {
+  for (const file of [
+    '001-core.sql',
+    '002-rls.sql',
+    '003-rpc.sql',
+    '010-eisen.sql',
+    '011-laatste-beheerder.sql',
+  ]) {
     try {
       await db.exec(readFileSync(join(sqlDir, file), 'utf8'));
       check(`${file} draait`, true);
@@ -394,6 +400,60 @@ async function main() {
   const diplomaCount = await one('select count(*)::int as n from diplomas');
   check('en er kan geen diploma bij via de app',
     addDiploma !== null || diplomaCount.n === 12);
+
+  section('De laatste beheerder');
+
+  // Dit is de fout die één keer echt gemaakt is: de enige beheerder tikt
+  // zichzelf op 'lid' en kan daarna niets meer, ook zijn eigen rol niet terug.
+  const selfDemote = await refused(
+    wim,
+    `update memberships set role = 'lid' where group_id = $1 and profile_id = $2`,
+    [jwf, wim],
+  );
+  check('de enige beheerder kan zichzelf niet degraderen', selfDemote !== null,
+    'het lukte wel');
+  check('en de melding zegt waarom',
+    (selfDemote ?? '').includes('laatste beheerder'), selfDemote ?? '');
+
+  const stillAdmin = await one(
+    `select role from memberships where group_id = '${jwf}' and profile_id = '${wim}'`,
+  );
+  check('hij is nog steeds beheerder', stillAdmin.role === 'beheerder', stillAdmin.role);
+
+  // Een lid degraderen of promoveren raakt de regel niet.
+  await as(wim, () =>
+    db.query(
+      `update memberships set role = 'instructeur' where group_id = $1 and profile_id = $2`,
+      [jwf, nina],
+    ),
+  );
+  const ninaRole = await one(
+    `select role from memberships where group_id = '${jwf}' and profile_id = '${nina}'`,
+  );
+  check('een lid promoveren kan gewoon', ninaRole.role === 'instructeur', ninaRole.role);
+
+  // Met een tweede beheerder mag het wel — dat is de nette volgorde.
+  await as(wim, () =>
+    db.query(
+      `update memberships set role = 'beheerder' where group_id = $1 and profile_id = $2`,
+      [jwf, sam],
+    ),
+  );
+  const nowAllowed = await refused(
+    wim,
+    `update memberships set role = 'lid' where group_id = $1 and profile_id = $2`,
+    [jwf, wim],
+  );
+  check('met een tweede beheerder mag het wel', nowAllowed === null, nowAllowed ?? '');
+
+  // En nu is Sam de laatste, dus die zit weer vast.
+  const samLast = await refused(
+    sam,
+    `update memberships set role = 'instructeur' where group_id = $1 and profile_id = $2`,
+    [jwf, sam],
+  );
+  check('de nieuwe laatste beheerder zit er ook aan vast', samLast !== null,
+    'het lukte wel');
 
   report();
   process.exit(failures === 0 ? 0 : 1);

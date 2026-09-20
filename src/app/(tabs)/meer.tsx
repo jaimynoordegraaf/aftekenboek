@@ -55,7 +55,9 @@ export default function Meer() {
             <Row gap={space.sm} style={{ flexWrap: 'wrap' }}>
               {memberships.map((m) => (
                 <Chip
-                  key={m.group_id}
+                  // het lidmaatschap zelf, niet de groep: dat is de sleutel die
+                  // per definitie uniek is
+                  key={m.id}
                   label={m.group.name}
                   selected={m.group_id === group?.id}
                   onPress={() => void setActiveGroup(m.group_id)}

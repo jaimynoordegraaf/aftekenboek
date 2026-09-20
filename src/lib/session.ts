@@ -81,8 +81,9 @@ export const useSession = create<State & Actions>((set, get) => ({
     }
 
     try {
-      const memberships = await fetchMemberships();
-      const profile = await fetchProfile(get().userId as string);
+      const userId = get().userId as string;
+      const memberships = await fetchMemberships(userId);
+      const profile = await fetchProfile(userId);
 
       // Keep the groep they were last looking at, if they are still in it.
       const stored = await AsyncStorage.getItem(ACTIVE_GROUP_KEY);
@@ -120,12 +121,24 @@ export const useSession = create<State & Actions>((set, get) => ({
 
 // ---------------------------------------------------------------- queries
 
-async function fetchMemberships(): Promise<MyMembership[]> {
+/**
+ * Alleen de lidmaatschappen van de ingelogde persoon zelf.
+ *
+ * Dat `.eq('profile_id', ...)` is geen overbodige veiligheid maar de kern van
+ * deze functie. De policy op memberships geeft je iedereen in je groep te zien
+ * — nodig, want leden moeten elkaar kunnen vinden — dus zonder dit filter komt
+ * hier de hele groep binnen. Dan staat de groep net zo vaak in de wisselaar als
+ * er leden zijn, en erger: useActiveMembership() pakt de eerste regel van die
+ * groep, en dat kan de rol van iemand anders zijn. Een beheerder ziet zichzelf
+ * dan als lid.
+ */
+async function fetchMemberships(userId: string): Promise<MyMembership[]> {
   const { data, error } = await db()
     .from('memberships')
     .select(
       'id, group_id, profile_id, role, groups(id, name, slug, accent_color), membership_sections(section_id)',
-    );
+    )
+    .eq('profile_id', userId);
   if (error) throw error;
 
   return (data ?? [])

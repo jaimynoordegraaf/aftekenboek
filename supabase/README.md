@@ -25,11 +25,14 @@ Dan **SQL Editor → New query**, plakken, **Run**. Hij hoort te eindigen met
 De genummerde bestanden zijn hetzelfde, opgesplitst, en zijn wat je draait op een
 project dat al bestaat:
 
-    001-core.sql    tabellen, types, helperfuncties, profiel-trigger
-    002-rls.sql     row level security — tot dit draait staan de tabellen open
-    003-rpc.sql     create_group, redeem_invite, group_members,
-                    member_enrollments, enrollment_sheet, set_sign_off
-    010-eisen.sql   de diploma's en hun eisen
+    001-core.sql              tabellen, types, helperfuncties, profiel-trigger
+    002-rls.sql               row level security — tot dit draait staan de
+                              tabellen open
+    003-rpc.sql               create_group, redeem_invite, group_members,
+                              member_enrollments, enrollment_sheet, set_sign_off
+    010-eisen.sql             de diploma's en hun eisen
+    011-laatste-beheerder.sql een groep kan zijn laatste beheerder niet
+                              kwijtraken
 
 `010-eisen.sql` mag je zo vaak draaien als je wilt: hij werkt bij op `code`, dus
 ids blijven gelijk en aftekeningen die er al zijn blijven kloppen. Zie
