@@ -96,6 +96,41 @@ policies laten een vreemde niets doen, maar je zet wel een beheerscherm in de
 etalage. Voor een paar beheerders is lokaal draaien rustiger; hosten is de moeite
 zodra er iemand bij moet vanaf een laptop zonder Node.
 
+## Updates naar toestellen sturen
+
+Een wijziging die alleen JavaScript raakt — tekst, een scherm, een bugfix — kan
+zonder store-ronde naar de telefoons:
+
+```bash
+npx eas update --branch production --message "Waarom deze update"
+```
+
+De app haalt hem op bij de eerstvolgende start.
+
+Wat **niet** zo kan: alles wat native is. Een nieuwe Expo-module, een
+rechtenwijziging, een ander icoon. Dan hoort er een nieuwe build bij.
+
+`runtimeVersion` staat op de policy `appVersion`, dus een update bereikt alleen
+toestellen met dezelfde `version` uit `app.json`. Zet je die op `0.2.0`, dan
+hoort daar een nieuwe build bij en zwijgt het kanaal voor iedereen die nog op de
+oude versie zit. Dat is met opzet: zo kan een JS-update nooit op een build landen
+waar de native kant niet bij past.
+
+## Bouwen en uitleveren
+
+```bash
+npx eas build -p android --profile preview      # APK om rond te delen
+npx eas build -p android --profile production   # app-bundle voor Play
+npx eas build -p ios --profile production       # voor TestFlight
+npx eas submit -p ios --latest                  # naar App Store Connect
+```
+
+De Supabase-waarden staan als omgevingsvariabelen op EAS, niet in `eas.json` —
+deze repo is publiek. Aanpassen met `eas env:list` en `eas env:update`.
+
+De iOS-stappen vragen om een Apple-login en moeten in een gewone terminal, niet
+via een knop: ze stellen vragen.
+
 ## Controles
 
 ```bash
