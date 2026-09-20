@@ -28,9 +28,13 @@ export default function Uitnodigingen() {
   const t = useTheme();
   const groupId = useSession((s) => s.activeGroupId);
 
+  const sections = useSession((s) => s.sections);
+
   const [role, setRole] = useState<Role>('lid');
   const [label, setLabel] = useState('');
   const [many, setMany] = useState(false);
+  /** Null is: geen speltak, dan koppelt de code ze nergens aan. */
+  const [section, setSection] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
@@ -44,7 +48,7 @@ export default function Uitnodigingen() {
     setBusy(true);
     setError(null);
     try {
-      await createInvite(groupId, role, label, many ? 50 : 1);
+      await createInvite(groupId, role, label, many ? 50 : 1, section);
       setLabel('');
       await reload();
     } catch (e) {
@@ -77,11 +81,34 @@ export default function Uitnodigingen() {
             ))}
           </Row>
 
+          {sections.length > 0 ? (
+            <>
+              <Txt variant="label" dim>
+                Komt in speltak
+              </Txt>
+              <Row gap={space.sm} style={{ flexWrap: 'wrap' }}>
+                <Chip
+                  label="Geen"
+                  selected={section === null}
+                  onPress={() => setSection(null)}
+                />
+                {sections.map((s) => (
+                  <Chip
+                    key={s.id}
+                    label={s.name}
+                    selected={section === s.id}
+                    onPress={() => setSection(s.id)}
+                  />
+                ))}
+              </Row>
+            </>
+          ) : null}
+
           <Field
             label="Waarvoor (optioneel)"
             value={label}
             onChangeText={setLabel}
-            placeholder="Zeeverkenners, najaar"
+            placeholder="Najaar 2026"
           />
 
           <Row gap={space.sm}>
@@ -123,6 +150,9 @@ export default function Uitnodigingen() {
                     </Txt>
                     <Txt variant="small" dim>
                       {ROLE_LABEL[inv.role]}
+                      {inv.section_id
+                        ? ` · ${sections.find((s) => s.id === inv.section_id)?.name ?? 'speltak'}`
+                        : ''}
                       {inv.label ? ` · ${inv.label}` : ''} · {inv.uses} van{' '}
                       {inv.max_uses} gebruikt
                     </Txt>

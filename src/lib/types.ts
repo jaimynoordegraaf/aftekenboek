@@ -105,9 +105,13 @@ export type DisciplineWithDiplomas = Discipline & { diplomas: Diploma[] };
 /** One row of the ledenlijst: `group_members()`. */
 export type MemberRow = {
   profile_id: string;
+  membership_id: string;
   full_name: string;
   role: Role;
+  /** Namen, voor op het scherm. */
   sections: string[];
+  /** Ids, om op te filteren en om toe te wijzen. */
+  section_ids: string[];
   in_progress: number;
   awarded: number;
 };

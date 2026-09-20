@@ -64,6 +64,8 @@
     display: inline-block; background: var(--chip); color: var(--dim);
     border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600;
   }
+  button.chip { border: 0; cursor: pointer; font-family: inherit; padding: 5px 12px; }
+  button.chip.on { background: var(--accent); color: var(--on-accent); }
   .note {
     border-left: 3px solid var(--warn); background: var(--card);
     padding: 12px 14px; border-radius: 0 10px 10px 0; margin-bottom: 16px; font-size: 13px;
@@ -204,6 +206,16 @@ function confirmed(text) {
   return window.confirm(text);
 }
 
+/** Een aan/uit-pil. Zelfde ding als de Chip in de app. */
+function chip(label, on, onclick) {
+  return el('button', { class: `chip${on ? ' on' : ''}`, onclick }, label);
+}
+
+function sectionsOf(group) {
+  return db.from('sections').select('*').eq('group_id', group.id)
+    .order('sort_order').order('name').then(check);
+}
+
 // ---------------------------------------------------------------- inloggen
 
 document.getElementById('signin-btn').addEventListener('click', async () => {
@@ -288,8 +300,42 @@ async function renderLeden(view) {
   view.append(el('p', { class: 'dim' },
     'Een lid dat je uit de groep haalt verliest zijn toegang, maar niet zijn aftekeningen. Komt hij terug met een code, dan staat zijn vorderingenstaat er weer.'));
 
-  const rows = await run(async () => check(await db.rpc('group_members', { p_group: group.id })));
-  for (const m of rows) {
+  const [rows, sections] = await Promise.all([
+    run(async () => check(await db.rpc('group_members', { p_group: group.id }))),
+    sectionsOf(group),
+  ]);
+
+  // Filter op speltak, zodat een instructeur met twintig namen alleen zijn
+  // eigen ploeg hoeft te zien.
+  let filter = null;
+  const list = el('div', {});
+  const filterRow = el('div', { class: 'row', style: 'margin-bottom:12px' });
+
+  function paintFilter() {
+    filterRow.innerHTML = '';
+    if (!sections.length) return;
+    filterRow.append(chip('Alle', filter === null, () => { filter = null; paint(); }));
+    for (const s of sections) {
+      filterRow.append(chip(s.name, filter === s.id, () => {
+        filter = filter === s.id ? null : s.id;
+        paint();
+      }));
+    }
+  }
+
+  function paint() {
+    paintFilter();
+    list.innerHTML = '';
+    const shown = filter ? rows.filter((m) => (m.section_ids ?? []).includes(filter)) : rows;
+    if (!shown.length) list.append(el('p', { class: 'dim' }, 'Niemand in deze speltak.'));
+    for (const m of shown) list.append(memberCard(m, sections));
+  }
+
+  view.append(filterRow, list);
+  paint();
+  return;
+
+  function memberCard(m, sections) {
     const card = el('div', { class: 'card' });
     const select = el('select', {});
     for (const r of ['lid', 'instructeur', 'beheerder']) {
@@ -327,7 +373,28 @@ async function renderLeden(view) {
         }, 'Verwijderen'),
       ),
     ));
-    view.append(card);
+
+    if (sections.length) {
+      const chips = el('div', { class: 'row', style: 'margin-top:10px; gap:6px' },
+        el('span', { class: 'dim', style: 'margin-right:4px' }, 'Speltakken:'));
+      for (const s of sections) {
+        const on = (m.section_ids ?? []).includes(s.id);
+        chips.append(chip(s.name, on, async () => {
+          // De hele set gaat mee, niet het verschil — zo kan er niets
+          // halverwege blijven hangen.
+          const next = on
+            ? (m.section_ids ?? []).filter((id) => id !== s.id)
+            : [...(m.section_ids ?? []), s.id];
+          await run(async () => check(await db.rpc('set_member_sections', {
+            p_group: group.id, p_profile: m.profile_id, p_sections: next,
+          })), 'Speltakken bijgewerkt');
+          render();
+        }));
+      }
+      card.append(chips);
+    }
+
+    return card;
   }
 }
 
@@ -336,15 +403,25 @@ async function renderLeden(view) {
 async function renderCodes(view) {
   view.append(el('h2', {}, 'Uitnodigingscodes'));
 
+  const sections = await sectionsOf(group);
+
   const role = el('select', {}, el('option', { value: 'lid' }, 'Lid'),
     el('option', { value: 'instructeur' }, 'Instructeur'));
   const label = field('Waarvoor (optioneel)', '', {});
   const uses = el('select', {}, el('option', { value: '1' }, 'Eén keer te gebruiken'),
     el('option', { value: '50' }, 'Voor een hele groep'));
 
+  // Een code met een speltak zet nieuwe leden er meteen in, zodra ze hem
+  // invullen. Dat scheelt nalopen wie waar hoort.
+  const speltak = el('select', {}, el('option', { value: '' }, 'Geen speltak'));
+  for (const s of sections) speltak.append(el('option', { value: s.id }, s.name));
+
   view.append(el('div', { class: 'card' },
     el('div', { class: 'row' },
       el('div', { class: 'grow' }, el('label', {}, 'Wordt'), role),
+      sections.length
+        ? el('div', { class: 'grow' }, el('label', {}, 'Komt in speltak'), speltak)
+        : null,
       label.wrap,
       el('div', { class: 'grow' }, el('label', {}, 'Geldigheid'), uses),
       el('button', {
@@ -357,6 +434,7 @@ async function renderCodes(view) {
             check(await db.from('invites').insert({
               group_id: group.id, code, role: role.value,
               label: label.input.value.trim() || null, max_uses: Number(uses.value),
+              section_id: speltak.value || null,
             }));
           }, 'Code gemaakt');
           render();
@@ -374,7 +452,9 @@ async function renderCodes(view) {
       el('div', {},
         el('strong', { style: 'letter-spacing:3px; font-size:18px' }, inv.code),
         el('div', { class: 'dim' },
-          `${inv.role}${inv.label ? ` · ${inv.label}` : ''} · ${inv.uses} van ${inv.max_uses} gebruikt`)),
+          `${inv.role}` +
+          (inv.section_id ? ` · ${sections.find((s) => s.id === inv.section_id)?.name ?? 'speltak'}` : '') +
+          `${inv.label ? ` · ${inv.label}` : ''} · ${inv.uses} van ${inv.max_uses} gebruikt`)),
       el('button', {
         class: 'btn danger',
         onclick: async () => {

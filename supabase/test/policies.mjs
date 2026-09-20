@@ -90,6 +90,7 @@ async function main() {
     '011-laatste-beheerder.sql',
     '012-onderdelen.sql',
     '013-beheer.sql',
+    '014-speltakken.sql',
     '010-eisen.sql',
   ]) {
     try {
@@ -496,6 +497,60 @@ async function main() {
   const diplomaCount = await one('select count(*)::int as n from diplomas');
   check('en een lid kan er geen diploma bij zetten', diplomaCount.n === 12,
     `${diplomaCount.n}`);
+
+  section('Speltakken');
+
+  await db.exec(
+    `insert into sections (group_id, name) values ('${jwf}', 'Zeeverkenners'), ('${jwf}', 'Wilde Vaart')`,
+  );
+  const zv = (await one(`select id from sections where name = 'Zeeverkenners'`)).id;
+  const wv = (await one(`select id from sections where name = 'Wilde Vaart'`)).id;
+
+  const assigned = await refused(wim, 'select set_member_sections($1, $2, $3)', [
+    jwf,
+    sam,
+    [zv, wv],
+  ]);
+  check('een beheerder wijst speltakken toe', assigned === null, assigned ?? '');
+
+  const samRow = await as(wim, async () => {
+    const r = await db.query('select * from group_members($1)', [jwf]);
+    return r.rows.find((m) => m.full_name === 'Sam het Lid');
+  });
+  check('de ledenlijst geeft de namen terug',
+    (samRow?.sections ?? []).length === 2, JSON.stringify(samRow?.sections));
+  check('en de ids, zodat er gefilterd kan worden',
+    (samRow?.section_ids ?? []).length === 2, JSON.stringify(samRow?.section_ids));
+
+  // Opnieuw zetten vervangt de set in plaats van er iets bij te stapelen.
+  await as(wim, () =>
+    db.query('select set_member_sections($1, $2, $3)', [jwf, sam, [wv]]),
+  );
+  const afterReplace = await one(
+    `select count(*)::int as n from membership_sections ms
+     join memberships m on m.id = ms.membership_id
+     where m.profile_id = '${sam}'`,
+  );
+  check('opnieuw toewijzen vervangt de hele set', afterReplace.n === 1, `${afterReplace.n}`);
+
+  const byMember = await refused(sam, 'select set_member_sections($1, $2, $3)', [
+    jwf,
+    sam,
+    [zv],
+  ]);
+  check('een lid wijst zichzelf niets toe', byMember !== null, 'het lukte wel');
+
+  // Een speltak uit een andere groep zou hier binnen kunnen glippen, want de
+  // functie draait als eigenaar en de policies kijken niet mee.
+  await db.exec(`insert into sections (group_id, name) values ('${other}', 'Vreemde Speltak')`);
+  const foreign = (await one(`select id from sections where name = 'Vreemde Speltak'`)).id;
+  const crossedSection = await refused(wim, 'select set_member_sections($1, $2, $3)', [
+    jwf,
+    sam,
+    [foreign],
+  ]);
+  check('een speltak van een andere groep wordt geweigerd', crossedSection !== null,
+    'het lukte wel');
 
   section('Iemand uit de groep halen');
 

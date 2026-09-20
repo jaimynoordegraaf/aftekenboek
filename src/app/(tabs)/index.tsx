@@ -33,7 +33,10 @@ export default function Home() {
 function Vaarders() {
   const router = useRouter();
   const groupId = useSession((s) => s.activeGroupId);
+  const sections = useSession((s) => s.sections);
   const [query, setQuery] = useState('');
+  /** Null is: alle speltakken. */
+  const [section, setSection] = useState<string | null>(null);
 
   const { data, loading, refreshing, error, reload } = useAsync(
     () => (groupId ? fetchMembers(groupId) : Promise.resolve([])),
@@ -44,13 +47,17 @@ function Vaarders() {
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return members;
-    return members.filter(
-      (m) =>
+    return members.filter((m) => {
+      // `?? []`: een database waar 014-speltakken.sql nog niet op gedraaid heeft
+      // stuurt het veld niet mee.
+      if (section && !(m.section_ids ?? []).includes(section)) return false;
+      if (!q) return true;
+      return (
         m.full_name.toLowerCase().includes(q) ||
-        m.sections.some((s) => s.toLowerCase().includes(q)),
-    );
-  }, [members, query]);
+        m.sections.some((s) => s.toLowerCase().includes(q))
+      );
+    });
+  }, [members, query, section]);
 
   if (loading) return <Loading />;
 
@@ -70,13 +77,41 @@ function Vaarders() {
           />
         ) : null}
 
+        {sections.length > 0 ? (
+          <Row gap={space.sm} style={{ flexWrap: 'wrap' }}>
+            <Chip
+              label="Alle"
+              selected={section === null}
+              onPress={() => setSection(null)}
+            />
+            {sections.map((s) => (
+              <Chip
+                key={s.id}
+                label={s.name}
+                selected={section === s.id}
+                // Nog eens tikken op de speltak die aanstaat zet het filter uit;
+                // dat is korter dan naar "Alle" terugreizen.
+                onPress={() => setSection(section === s.id ? null : s.id)}
+              />
+            ))}
+          </Row>
+        ) : null}
+
         {shown.length === 0 ? (
           <Empty
-            title={query ? 'Niemand gevonden' : 'Nog geen vaarders'}
+            title={
+              query
+                ? 'Niemand gevonden'
+                : section
+                  ? 'Niemand in deze speltak'
+                  : 'Nog geen vaarders'
+            }
             body={
               query
                 ? undefined
-                : 'Deel een uitnodigingscode uit vanuit Meer › Beheer, dan melden ze zich hier aan.'
+                : section
+                  ? 'Koppel leden aan een speltak via Meer › Beheer › Rollen.'
+                  : 'Deel een uitnodigingscode uit vanuit Meer › Beheer, dan melden ze zich hier aan.'
             }
           />
         ) : (

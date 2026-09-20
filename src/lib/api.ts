@@ -289,6 +289,23 @@ export async function removeMember(groupId: string, profileId: string): Promise<
   if (error) throw error;
 }
 
+/**
+ * De speltakken van één lid, in één keer vervangen. Een leeg lijstje haalt hem
+ * overal uit.
+ */
+export async function setMemberSections(
+  groupId: string,
+  profileId: string,
+  sectionIds: string[],
+): Promise<void> {
+  const { error } = await db().rpc('set_member_sections', {
+    p_group: groupId,
+    p_profile: profileId,
+    p_sections: sectionIds,
+  });
+  if (error) throw error;
+}
+
 export async function fetchInvites(groupId: string): Promise<Invite[]> {
   const { data, error } = await db()
     .from('invites')
@@ -299,11 +316,17 @@ export async function fetchInvites(groupId: string): Promise<Invite[]> {
   return (data ?? []) as Invite[];
 }
 
+/**
+ * `sectionId` zet de nieuwe leden meteen in de goede speltak: redeem_invite
+ * koppelt ze eraan zodra ze de code invullen. Dat is de enige plek waar een lid
+ * zichzelf in een speltak krijgt zonder dat een beheerder er nog naar omkijkt.
+ */
 export async function createInvite(
   groupId: string,
   role: Role,
   label: string | null,
   maxUses: number,
+  sectionId: string | null = null,
 ): Promise<Invite> {
   const { data, error } = await db()
     .from('invites')
@@ -313,6 +336,7 @@ export async function createInvite(
       role,
       label: label?.trim() || null,
       max_uses: maxUses,
+      section_id: sectionId,
     })
     .select('*')
     .single();
