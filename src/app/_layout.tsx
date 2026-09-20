@@ -109,8 +109,8 @@ function NotConfigured() {
       <Txt variant="heading">Nog niet gekoppeld</Txt>
       <Txt dim>
         Er is nog geen server ingesteld. Zet EXPO_PUBLIC_SUPABASE_URL en
-        EXPO_PUBLIC_SUPABASE_ANON_KEY in een .env in de projectmap en start de app
-        opnieuw. De stappen staan in supabase/README.md.
+        EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY in een .env in de projectmap en start
+        de app opnieuw. De stappen staan in supabase/README.md.
       </Txt>
     </View>
   );

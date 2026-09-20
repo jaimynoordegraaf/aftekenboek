@@ -14,14 +14,14 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
 
-// Supabase is replacing the "anon" key with a "publishable" key
-// (sb_publishable_...). Both go in the same place, so either name is accepted
-// and the newer one wins when both are set.
-const anonKey =
+// New projects get a publishable key (sb_publishable_...); the old JWT "anon"
+// key is only still around in projects made before the switch. Both go in the
+// same place, so either name is accepted and the newer one wins.
+const publishableKey =
   process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-export const isConfigured = Boolean(url && anonKey);
+export const isConfigured = Boolean(url && publishableKey);
 
 /**
  * Storage is only attached when there is a real device or browser to store in.
@@ -31,7 +31,7 @@ export const isConfigured = Boolean(url && anonKey);
 const canPersistSession = typeof window !== 'undefined';
 
 export const supabase: SupabaseClient | null = isConfigured
-  ? createClient(url as string, anonKey as string, {
+  ? createClient(url as string, publishableKey as string, {
       auth: {
         storage: canPersistSession ? AsyncStorage : undefined,
         persistSession: canPersistSession,

@@ -44,7 +44,7 @@ Zet daarna Supabase op — de stappen staan in
 [supabase/README.md](supabase/README.md) — en maak een `.env`:
 
     EXPO_PUBLIC_SUPABASE_URL=https://xxxxxxxx.supabase.co
-    EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+    EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 
 Dan:
 

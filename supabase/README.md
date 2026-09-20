@@ -42,10 +42,17 @@ uit zodat testers meteen kunnen inloggen. Zet hem weer aan voor echt gebruik.
 
 ## 4. De app eraan koppelen
 
-**Project Settings → API**. Zet in een `.env` in de projectmap:
+Zet in een `.env` in de projectmap (kopieer `.env.example`, niet hernoemen —
+dat voorbeeld wil je houden):
 
     EXPO_PUBLIC_SUPABASE_URL=https://xxxxxxxx.supabase.co
-    EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+    EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+
+Allebei staan ze in het dashboard onder **Project Settings**: de URL bij
+**Data API**, de sleutel bij **API Keys**. Neem de *publishable* sleutel, niet de
+*secret* — die laatste omzeilt alle policies en hoort nooit in een app die je
+uitdeelt. Oudere projecten hebben in plaats daarvan een JWT-`anon`-sleutel; die
+mag ook, onder de naam `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
 
 `.env` staat in `.gitignore`. Start `npx expo start` opnieuw na het wijzigen —
 Expo leest deze bij het bundelen, niet tijdens het draaien.
