@@ -47,10 +47,50 @@ volgorde.
 ids blijven gelijk en aftekeningen die er al zijn blijven kloppen. Zie
 [docs/EISEN.md](../docs/EISEN.md).
 
-## 3. Inloggen met e-mail aanzetten
+## 3. Inloggen met e-mail aanzetten, en waar de mail vandaan komt
 
-**Authentication → Providers → Email**: aan, en zet **Confirm email** voorlopig
-uit zodat testers meteen kunnen inloggen. Zet hem weer aan voor echt gebruik.
+**Authentication → Providers → Email**: aan. **Confirm email** mag uit terwijl je
+zelf test — dan hoef je niet op een mailtje te wachten — maar aan voordat je de
+app uitdeelt. De app en de beheerpagina vangen allebei op dat er na het
+registreren nog geen sessie is en zeggen dan dat er een mail onderweg is.
+
+### Eigen SMTP
+
+De ingebouwde mailer van Supabase heeft een lage limiet, een handvol per uur. Dat
+merk je pas als je op één ochtend een stuk of acht instructeurs aanmeldt en de
+laatsten niets krijgen — het lijkt dan alsof de registratie stuk is, terwijl je
+gewoon tegen de limiet aanloopt.
+
+Scouting JWF draait op Google Workspace, en dat scheelt werk: het SPF-record van
+het domein bevat `include:_spf.google.com` en DKIM staat aan, dus mail die via
+Google verstuurd wordt komt meteen goed aan. Geen DNS-wijziging nodig.
+
+**Authentication → Emails → SMTP Settings**:
+
+    Host            smtp.gmail.com
+    Port            465
+    Username        het volledige adres waarvandaan verstuurd wordt
+    Password        een Google app-wachtwoord van zestien tekens
+    Sender email    hetzelfde adres als de username
+    Sender name     Scouting JWF Aftekenboek
+
+Drie dingen die hier misgaan:
+
+- **Het wachtwoord moet een app-wachtwoord zijn.** Het gewone accountwachtwoord
+  wordt geweigerd. Er is geen knop in de admin-console om dit aan te zetten: de
+  oude "less secure apps"-instelling is verwijderd. Een app-wachtwoord kan pas
+  bestaan als tweestapsverificatie aanstaat op het account zelf, via
+  <https://myaccount.google.com> → Beveiliging, niet via de admin-console.
+- **Het afzenderadres moet bij het inlogaccount horen.** Een ander adres mag
+  alleen als het in Gmail als alias is toegevoegd onder "E-mail verzenden als".
+- Werkt het niet, kijk dan in **Logs → Auth**. De SMTP-fout staat daar letterlijk;
+  `535 Authentication failed` betekent een verkeerd app-wachtwoord.
+
+Zijn app-wachtwoorden in de tenant uitgeschakeld, dan is Google geen route en ga
+je naar een verzenddienst. Resend heeft een koppeling die deze instellingen
+invult, maar vraagt twee DNS-records op het domein. Vul de bestaande SPF-regel
+dan aan, vervang hem niet — zonder `include:_spf.google.com` breekt de gewone
+mail van de groep.
 
 ## 4. De app eraan koppelen
 
