@@ -68,14 +68,17 @@ await writeFile(
     `window.AFTEKENBOEK = ${JSON.stringify({ url, key }, null, 2)};\n`,
 );
 
-// De meeste WordPress-hosts draaien Apache. Geen mapinhoud tonen, en het
-// gegenereerde bestand niet laten cachen als de sleutel ooit wisselt.
+// De meeste WordPress-hosts draaien Apache. Geen mapinhoud tonen, het
+// gegenereerde bestand niet laten cachen als de sleutel ooit wisselt, en niet
+// in zoekmachines belanden — een inlogscherm dat in Google staat nodigt uit
+// zonder dat het iets oplevert.
 await writeFile(
   join(out, '.htaccess'),
   [
     'Options -Indexes',
     '',
     '<IfModule mod_headers.c>',
+    '  Header set X-Robots-Tag "noindex, nofollow"',
     '  <FilesMatch "config\\.js$">',
     '    Header set Cache-Control "no-store"',
     '  </FilesMatch>',
