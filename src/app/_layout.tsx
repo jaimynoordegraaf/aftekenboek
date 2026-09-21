@@ -1,13 +1,16 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { View } from 'react-native';
+import * as Linking from 'expo-linking';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { Loading, Txt } from '@/components/ui';
+import { isAuthLink, parseAuthLink } from '@/lib/auth-link';
+import { errorMessage } from '@/lib/errors';
 import { useSession } from '@/lib/session';
-import { isConfigured } from '@/lib/supabase';
+import { isConfigured, supabase } from '@/lib/supabase';
 import { useTheme } from '@/lib/use-theme';
 
 export default function RootLayout() {
@@ -16,6 +19,8 @@ export default function RootLayout() {
   useEffect(() => {
     void bootstrap();
   }, [bootstrap]);
+
+  useAuthLinks();
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -39,22 +44,31 @@ function Gate() {
   const ready = useSession((s) => s.ready);
   const userId = useSession((s) => s.userId);
   const hasGroup = useSession((s) => s.memberships.length > 0);
+  const recovering = useSession((s) => s.recovering);
 
   const first = segments[0];
   const inAuth = first === 'sign-in';
   const inOnboarding = first === 'welkom';
+  const inRecovery = first === 'wachtwoord';
 
   useEffect(() => {
     if (!ready) return;
+
+    // Binnengekomen via "wachtwoord vergeten": er is een sessie, maar eerst
+    // moet er een nieuw wachtwoord gekozen worden, en pas dan de rest van de app.
+    if (recovering && userId) {
+      if (!inRecovery) router.replace('/wachtwoord');
+      return;
+    }
 
     if (!userId) {
       if (!inAuth) router.replace('/sign-in');
     } else if (!hasGroup) {
       if (!inOnboarding) router.replace('/welkom');
-    } else if (inAuth || inOnboarding) {
+    } else if (inAuth || inOnboarding || inRecovery) {
       router.replace('/');
     }
-  }, [ready, userId, hasGroup, inAuth, inOnboarding, router]);
+  }, [ready, userId, hasGroup, recovering, inAuth, inOnboarding, inRecovery, router]);
 
   if (!isConfigured) return <NotConfigured />;
   if (!ready) {
@@ -83,6 +97,7 @@ function Gate() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="sign-in" options={{ headerShown: false }} />
         <Stack.Screen name="welkom" options={{ headerShown: false }} />
+        <Stack.Screen name="wachtwoord" options={{ headerShown: false }} />
         <Stack.Screen name="profiel" options={{ title: 'Mijn gegevens' }} />
         <Stack.Screen name="lid/[id]" options={{ title: 'Vaarder' }} />
         <Stack.Screen name="voortgang/[id]" options={{ title: 'Aftekenlijst' }} />
@@ -126,4 +141,57 @@ function NotConfigured() {
       </Txt>
     </View>
   );
+}
+
+/**
+ * Links uit mails van Supabase opvangen: "wachtwoord vergeten" en de
+ * bevestiging na het registreren.
+ *
+ * De sleutels in zo'n link worden omgezet in een sessie. Bij een herstellink
+ * gaat de app daarna naar het scherm om een nieuw wachtwoord te kiezen; bij een
+ * bevestiging ben je gewoon ingelogd. Een verlopen link geeft een melding op
+ * het inlogscherm, in plaats van dat er stilletjes niets gebeurt.
+ */
+function useAuthLinks() {
+  const url = Linking.useLinkingURL();
+  const handled = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!url || url === handled.current || !supabase) return;
+    const link = parseAuthLink(url);
+    if (!isAuthLink(link)) return;
+    handled.current = url;
+
+    const { setRecovering, setAuthLinkError } = useSession.getState();
+
+    if (link.error) {
+      setAuthLinkError(
+        /expired|invalid/i.test(link.error)
+          ? 'Deze link is verlopen of al gebruikt. Vraag een nieuwe aan.'
+          : link.error,
+      );
+      return;
+    }
+
+    // Vóór de sessie, niet erna: setSession maakt je meteen ingelogd, en dan zou
+    // de poortwachter je eerst naar de tabbladen sturen voordat hij weet dat je
+    // een nieuw wachtwoord moet kiezen.
+    if (link.type === 'recovery') setRecovering(true);
+
+    const client = supabase;
+    void (async () => {
+      const { error } = link.code
+        ? await client.auth.exchangeCodeForSession(link.code)
+        : await client.auth.setSession({
+            access_token: link.accessToken as string,
+            refresh_token: link.refreshToken as string,
+          });
+      if (error) {
+        setRecovering(false);
+        setAuthLinkError(errorMessage(error));
+        return;
+      }
+      setAuthLinkError(null);
+    })();
+  }, [url]);
 }

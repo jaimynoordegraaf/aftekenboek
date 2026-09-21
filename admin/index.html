@@ -77,7 +77,7 @@
   .part { display: flex; gap: 8px; align-items: center; margin: 6px 0 0 16px; }
   .part input { flex: 1; }
   .num { width: 62px; flex: none; }
-  #signin { max-width: 380px; margin: 12vh auto; }
+  #signin, #join, #newpass { max-width: 380px; margin: 12vh auto; }
   .hidden { display: none !important; }
 </style>
 </head>
@@ -92,16 +92,34 @@
       <input id="name" type="text" autocomplete="name" placeholder="Voor- en achternaam"></div>
     <div style="margin-top:12px"><label for="email">E-mailadres</label>
       <input id="email" type="email" autocomplete="username"></div>
-    <div style="margin-top:12px"><label for="password">Wachtwoord</label>
+    <div id="password-row" style="margin-top:12px"><label for="password">Wachtwoord</label>
       <input id="password" type="password" autocomplete="current-password"></div>
 
     <div id="signin-error" class="note err hidden" style="margin-top:12px"></div>
     <div id="signin-ok" class="note ok hidden" style="margin-top:12px"></div>
 
     <button class="btn" id="signin-btn" style="margin-top:16px; width:100%">Inloggen</button>
+    <button class="btn ghost" id="forgot-btn" style="margin-top:8px; width:100%">
+      Wachtwoord vergeten?
+    </button>
     <button class="btn ghost" id="mode-btn" style="margin-top:8px; width:100%">
       Nog geen account? Maak er een
     </button>
+  </div>
+</div>
+
+<!-- Na de link uit "wachtwoord vergeten". Er is dan al een sessie — die zat in
+     de link — maar de pagina gaat pas verder als het nieuwe wachtwoord staat. -->
+<div id="newpass" class="hidden">
+  <div class="card">
+    <h2>Nieuw wachtwoord</h2>
+    <p class="dim" id="newpass-lead">Kies een wachtwoord van minimaal 8 tekens.</p>
+    <div style="margin-top:12px"><label for="np1">Nieuw wachtwoord</label>
+      <input id="np1" type="password" autocomplete="new-password"></div>
+    <div style="margin-top:12px"><label for="np2">Nog een keer</label>
+      <input id="np2" type="password" autocomplete="new-password"></div>
+    <div id="newpass-error" class="note err hidden" style="margin-top:12px"></div>
+    <button class="btn" id="newpass-btn" style="margin-top:16px; width:100%">Wachtwoord opslaan</button>
   </div>
 </div>
 
@@ -160,6 +178,19 @@
  */
 
 const cfg = window.AFTEKENBOEK ?? { url: '', key: '' };
+
+// Uitlezen vóór createClient. supabase-js haalt de sleutels uit een link in de
+// URL, maakt er een sessie van en wist daarna de hash; wat voor link het was
+// is dan niet meer te zien.
+const linkInfo = (() => {
+  const p = new URLSearchParams(location.hash.slice(1));
+  const error = p.get('error_description');
+  return {
+    recovery: p.get('type') === 'recovery',
+    error: error ? error.replace(/\+/g, ' ') : null,
+  };
+})();
+
 const db = cfg.url && cfg.key ? window.supabase.createClient(cfg.url, cfg.key) : null;
 
 let me = null;       // { id, name, email }
@@ -248,19 +279,24 @@ function sectionsOf(group) {
 
 // ---------------------------------------------------------------- inloggen
 
-/** 'in' = inloggen, 'up' = account maken. */
+/** 'in' = inloggen, 'up' = account maken, 'reset' = wachtwoord vergeten. */
 let authMode = 'in';
 
 function paintAuthMode() {
   const up = authMode === 'up';
+  const reset = authMode === 'reset';
   document.getElementById('name-row').classList.toggle('hidden', !up);
+  document.getElementById('password-row').classList.toggle('hidden', reset);
+  document.getElementById('forgot-btn').classList.toggle('hidden', authMode !== 'in');
   document.getElementById('signin-lead').textContent = up
     ? 'Maak een account. Daarna vul je de code in die je van je groep kreeg.'
-    : 'Beheerpagina. Log in met je account.';
-  document.getElementById('signin-btn').textContent = up ? 'Account maken' : 'Inloggen';
-  document.getElementById('mode-btn').textContent = up
-    ? 'Ik heb al een account'
-    : 'Nog geen account? Maak er een';
+    : reset
+      ? 'Vul je e-mailadres in. Je krijgt een mail met een link om een nieuw wachtwoord te kiezen.'
+      : 'Beheerpagina. Log in met je account.';
+  document.getElementById('signin-btn').textContent =
+    up ? 'Account maken' : reset ? 'Stuur herstellink' : 'Inloggen';
+  document.getElementById('mode-btn').textContent =
+    authMode === 'in' ? 'Nog geen account? Maak er een' : 'Terug naar inloggen';
   document.getElementById('password').setAttribute(
     'autocomplete', up ? 'new-password' : 'current-password');
   document.getElementById('signin-error').classList.add('hidden');
@@ -270,6 +306,46 @@ function paintAuthMode() {
 document.getElementById('mode-btn').addEventListener('click', () => {
   authMode = authMode === 'in' ? 'up' : 'in';
   paintAuthMode();
+});
+
+document.getElementById('forgot-btn').addEventListener('click', () => {
+  authMode = 'reset';
+  paintAuthMode();
+});
+
+function showNewPassword() {
+  document.getElementById('signin').classList.add('hidden');
+  document.getElementById('join').classList.add('hidden');
+  document.getElementById('newpass').classList.remove('hidden');
+  document.getElementById('np1').focus();
+}
+
+document.getElementById('newpass-btn').addEventListener('click', async () => {
+  const box = document.getElementById('newpass-error');
+  box.classList.add('hidden');
+  const p1 = document.getElementById('np1').value;
+  const p2 = document.getElementById('np2').value;
+
+  const fout = p1.length < 8
+    ? 'Kies een wachtwoord van minimaal 8 tekens.'
+    : p1 !== p2
+      ? 'De twee wachtwoorden zijn niet gelijk.'
+      : null;
+  if (fout) {
+    box.textContent = fout;
+    box.classList.remove('hidden');
+    return;
+  }
+
+  const { error } = await db.auth.updateUser({ password: p1 });
+  if (error) {
+    box.textContent = message(error);
+    box.classList.remove('hidden');
+    return;
+  }
+  document.getElementById('newpass').classList.add('hidden');
+  await start();
+  say('Je nieuwe wachtwoord is opgeslagen.', 'ok');
 });
 
 document.getElementById('signin-btn').addEventListener('click', async () => {
@@ -286,6 +362,29 @@ document.getElementById('signin-btn').addEventListener('click', async () => {
 
   const email = document.getElementById('email').value.trim();
   const password = document.getElementById('password').value;
+
+  if (authMode === 'reset') {
+    if (!email) {
+      box.textContent = 'Vul je e-mailadres in.';
+      box.classList.remove('hidden');
+      return;
+    }
+    const { error } = await db.auth.resetPasswordForEmail(email, {
+      // Terug naar deze pagina, lokaal of gehost. Moet in de redirect-allowlist
+      // van Supabase staan; anders valt hij terug op de Site URL.
+      redirectTo: location.href.split('#')[0].split('?')[0],
+    });
+    if (error) {
+      box.textContent = message(error);
+      box.classList.remove('hidden');
+      return;
+    }
+    // Bewust dezelfde tekst of het adres bestaat of niet: anders kan iedereen
+    // hier uitzoeken wie er een account heeft.
+    okBox.textContent = 'Als er een account bij dit adres hoort, staat er een mail onderweg met een link om een nieuw wachtwoord te kiezen.';
+    okBox.classList.remove('hidden');
+    return;
+  }
 
   if (authMode === 'up') {
     const naam = document.getElementById('name').value.trim();
@@ -962,7 +1061,23 @@ function nieuweEis(diplomaId, kind, position) {
 // ---------------------------------------------------------------- start
 paintAuthMode();
 if (db) {
-  db.auth.getSession().then(({ data }) => { if (data.session) start(); });
+  // Een verlopen of al gebruikte link uit een mail komt terug met een fout in
+  // plaats van sleutels. Dat moet in beeld, niet stil verdwijnen.
+  if (linkInfo.error) {
+    const box = document.getElementById('signin-error');
+    box.textContent = /expired|invalid/i.test(linkInfo.error)
+      ? 'Deze link is verlopen of al gebruikt. Vraag een nieuwe aan.'
+      : linkInfo.error;
+    box.classList.remove('hidden');
+    if (linkInfo.recovery) { authMode = 'reset'; paintAuthMode(); box.classList.remove('hidden'); }
+  }
+
+  // getSession wacht tot supabase-js een eventuele link in de URL verwerkt heeft.
+  db.auth.getSession().then(({ data }) => {
+    if (!data.session) return;
+    if (linkInfo.recovery) showNewPassword();
+    else start();
+  });
 } else {
   document.getElementById('signin-error').textContent =
     'Geen Supabase-gegevens gevonden. Start deze pagina met "npm run admin" vanuit de projectmap.';

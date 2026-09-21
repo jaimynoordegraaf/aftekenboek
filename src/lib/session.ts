@@ -32,6 +32,14 @@ type State = {
   activeGroupId: string | null;
   sections: Section[];
   error: string | null;
+  /**
+   * Binnengekomen via een herstellink uit "wachtwoord vergeten". Dan is er een
+   * sessie, maar hoort de app niet naar de tabbladen te gaan: eerst een nieuw
+   * wachtwoord kiezen.
+   */
+  recovering: boolean;
+  /** Een link uit een mail die niet werkte, meestal omdat hij verlopen was. */
+  authLinkError: string | null;
 };
 
 type Actions = {
@@ -39,6 +47,8 @@ type Actions = {
   reload: () => Promise<void>;
   setActiveGroup: (groupId: string) => Promise<void>;
   signOut: () => Promise<void>;
+  setRecovering: (recovering: boolean) => void;
+  setAuthLinkError: (message: string | null) => void;
 };
 
 export const useSession = create<State & Actions>((set, get) => ({
@@ -50,6 +60,16 @@ export const useSession = create<State & Actions>((set, get) => ({
   activeGroupId: null,
   sections: [],
   error: null,
+  recovering: false,
+  authLinkError: null,
+
+  setRecovering(recovering) {
+    set({ recovering });
+  },
+
+  setAuthLinkError(message) {
+    set({ authLinkError: message });
+  },
 
   async bootstrap() {
     if (!supabase) {
@@ -115,6 +135,7 @@ export const useSession = create<State & Actions>((set, get) => ({
       memberships: [],
       sections: [],
       activeGroupId: null,
+      recovering: false,
     });
   },
 }));
