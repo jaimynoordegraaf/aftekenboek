@@ -93,6 +93,7 @@ async function main() {
     '014-speltakken.sql',
     '015-leden-zonder-account.sql',
     '016-bakken-en-standen.sql',
+    '017-account-verwijderen.sql',
     '010-eisen.sql',
   ]) {
     try {
@@ -824,6 +825,54 @@ async function main() {
   );
   check('de nieuwe laatste beheerder zit er ook aan vast', samLast !== null,
     'het lukte wel');
+
+  section('Je eigen account verwijderen');
+
+  // Een instructeur die zelf ook een diploma haalt, en die bij Nina iets heeft
+  // afgetekend. Na het verwijderen hoort zijn eigen voortgang weg te zijn en
+  // Nina's aftekening te blijven — alleen zonder zijn naam.
+  const tijd = await newUser('tijd@voorbeeld.nl', 'Tijdelijke Instructeur');
+  await db.exec(
+    `insert into memberships (group_id, profile_id, role) values ('${jwf}', '${tijd}', 'instructeur')`,
+  );
+  await db.exec(
+    `insert into enrollments (group_id, profile_id, diploma_id) values ('${jwf}', '${tijd}', '${roeien12}')`,
+  );
+  const eis3 = (await one(`select id from requirements where code = 'roeien-12.p3'`)).id;
+  await as(tijd, () =>
+    db.query(`select set_sign_off_status($1, $2, 'gehaald', null)`, [ninaEnrollment, eis3]),
+  );
+
+  const verwijderd = await refused(tijd, 'select delete_my_account()');
+  check('iemand verwijdert zijn eigen account', verwijderd === null, verwijderd ?? '');
+
+  const profielWeg = await one(`select count(*)::int as n from profiles where id = '${tijd}'`);
+  const loginWeg = await one(`select count(*)::int as n from auth.users where id = '${tijd}'`);
+  const eigenVoortgang = await one(
+    `select count(*)::int as n from enrollments where profile_id = '${tijd}'`,
+  );
+  check('zijn naam is weg', profielWeg.n === 0, `${profielWeg.n}`);
+  check('zijn login is weg', loginWeg.n === 0, `${loginWeg.n}`);
+  check('zijn eigen voortgang is weg', eigenVoortgang.n === 0, `${eigenVoortgang.n}`);
+
+  const bijNina = await one(
+    `select status, signed_by from sign_offs
+     where enrollment_id = '${ninaEnrollment}' and requirement_id = '${eis3}'`,
+  );
+  check('wat hij bij een ander aftekende blijft staan', bijNina?.status === 'gehaald',
+    bijNina?.status ?? 'weg');
+  check('maar niet meer op zijn naam', bijNina?.signed_by === null,
+    String(bijNina?.signed_by));
+
+  // Ander is de enige beheerder van zijn eigen groep.
+  const laatste = await refused(ander, 'select delete_my_account()');
+  check('de laatste beheerder van een groep kan het niet', laatste !== null,
+    'het lukte wel');
+  const anderBestaat = await one(`select count(*)::int as n from profiles where id = '${ander}'`);
+  check('en zijn account staat er nog', anderBestaat.n === 1, `${anderBestaat.n}`);
+
+  const zonderLogin = await refused('', 'select delete_my_account()');
+  check('niet ingelogd verwijdert niets', zonderLogin !== null, 'het lukte wel');
 
   report();
   process.exit(failures === 0 ? 0 : 1);

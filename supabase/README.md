@@ -37,6 +37,13 @@ project dat al bestaat:
                               commando's, termen)
     013-beheer.sql            iemand uit de groep halen, en de catalogus
                               bewerkbaar voor beheerders
+    014-speltakken.sql        leden aan speltakken koppelen, speltak op een
+                              uitnodigingscode
+    015-leden-zonder-account.sql
+                              vaarders zonder eigen login
+    016-bakken-en-standen.sql bakken, en aftekenen in drie standen
+    017-account-verwijderen.sql
+                              je eigen account verwijderen vanuit de app
 
 `010-eisen.sql` draait **als laatste**, ook al is zijn nummer lager. De catalogus
 hangt aan elke schemawijziging die erna genummerd is, dus hij wordt steeds

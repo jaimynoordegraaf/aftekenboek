@@ -46,7 +46,7 @@ type Actions = {
   bootstrap: () => Promise<void>;
   reload: () => Promise<void>;
   setActiveGroup: (groupId: string) => Promise<void>;
-  signOut: () => Promise<void>;
+  signOut: (scope?: 'global' | 'local') => Promise<void>;
   setRecovering: (recovering: boolean) => void;
   setAuthLinkError: (message: string | null) => void;
 };
@@ -125,8 +125,8 @@ export const useSession = create<State & Actions>((set, get) => ({
     set({ activeGroupId: groupId, sections: await fetchSections(groupId) });
   },
 
-  async signOut() {
-    await supabase?.auth.signOut();
+  async signOut(scope) {
+    await supabase?.auth.signOut(scope ? { scope } : undefined);
     await AsyncStorage.removeItem(ACTIVE_GROUP_KEY);
     set({
       userId: null,

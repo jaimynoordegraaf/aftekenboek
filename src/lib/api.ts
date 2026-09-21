@@ -505,3 +505,13 @@ export async function updateMyName(userId: string, fullName: string): Promise<vo
     .eq('id', userId);
   if (error) throw error;
 }
+
+/**
+ * Je eigen account weg: login, naam, lidmaatschappen en je eigen voortgang.
+ * Wat je bij anderen aftekende blijft staan, zonder jouw naam. De laatste
+ * beheerder van een groep krijgt een foutmelding die zegt wat eerst moet.
+ */
+export async function deleteMyAccount(): Promise<void> {
+  const { error } = await db().rpc('delete_my_account');
+  if (error) throw error;
+}

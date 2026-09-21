@@ -112,10 +112,13 @@ Stuur je verzoek naar **[E-MAILADRES VOOR PRIVACYVRAGEN]**. We reageren binnen e
 maand. Om te voorkomen dat iemand anders jouw gegevens opvraagt, kunnen we je vragen
 aan te tonen wie je bent.
 
-**Je account verwijderen.** Wil je je account en je gegevens laten verwijderen, mail
-dan naar hetzelfde adres. We verwijderen dan je account, je naam en je voortgang. Ben je
-instructeur, dan blijft op aftekeningen die jij hebt gezet wel staan dát ze zijn gezet,
-maar niet meer door wie.
+**Je account verwijderen.** Dat kan in de app zelf, via **Meer › Mijn gegevens ›
+Account verwijderen**. Je account, je naam en je eigen voortgang worden dan meteen
+verwijderd. Ben je instructeur, dan blijft op aftekeningen die jij hebt gezet wel staan
+dát ze zijn gezet, maar niet meer door wie. Ben je de laatste beheerder van de groep,
+maak dan eerst iemand anders beheerder. Lukt het niet in de app, of heb je geen
+account maar wil je dat je gegevens als vaarder worden verwijderd, mail dan naar
+hetzelfde adres.
 
 Ben je het niet eens met hoe we met je gegevens omgaan, dan kun je een klacht indienen
 bij de Autoriteit Persoonsgegevens (autoriteitpersoonsgegevens.nl).
