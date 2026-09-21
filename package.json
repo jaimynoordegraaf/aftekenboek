@@ -15,7 +15,8 @@
     "export:ios": "expo export --platform ios",
     "admin": "node admin/serve.mjs",
     "admin:build": "node admin/build.mjs",
-    "icons": "node scripts/icons.mjs"
+    "icons": "node scripts/icons.mjs",
+    "feature-graphic": "node scripts/feature-graphic.mjs"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
