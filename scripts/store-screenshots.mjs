@@ -12,7 +12,9 @@
  * Maak de opnames in de demogroep (supabase/demo/demo-groep.sql), niet in de
  * echte groep: dit komt in een openbare winkel te staan.
  *
- * Draaien met: npm run screenshots [-- --theme=dark] [-- --device=iphone,android]
+ * Standaard donker: de app zelf is licht en verdwijnt tegen een lichte achtergrond.
+ *
+ * Draaien met: npm run screenshots [-- --theme=light] [-- --device=iphone,android]
  */
 
 import fs from 'node:fs';
@@ -47,7 +49,7 @@ const devices = {
 
 /** Op het nummer voor in de bestandsnaam. */
 const captions = {
-  1: 'Zie hoe ver iedere vaarder is',
+  1: 'Al je vaarders, per speltak',
   2: 'Per eis afgetekend, met datum en naam',
   3: 'Knopen en commando’s los afstrepen',
   4: 'Een hele bak in één keer aftekenen',
@@ -61,7 +63,7 @@ const args = Object.fromEntries(
     return [k, v ?? true];
   }),
 );
-const theme = themes[args.theme === 'dark' ? 'dark' : 'light'];
+const theme = themes[args.theme === 'light' ? 'light' : 'dark'];
 const wanted = typeof args.device === 'string' ? args.device.split(',') : Object.keys(devices);
 
 const round = (w, h, r) =>
