@@ -11,8 +11,8 @@ je rechten zijn.
 
 Scouting Jan Willem Friso is verantwoordelijk voor de gegevens in Aftekenboek.
 
-- Adres: **[ADRES VAN DE GROEP]**
-- Vragen over privacy: **[E-MAILADRES VOOR PRIVACYVRAGEN]**
+- Adres: Toepad 1, 2921 AZ Krimpen aan den IJssel
+- Vragen over privacy: **info@scoutingjwf.nl**
 
 ## Welke gegevens we gebruiken
 
@@ -77,7 +77,7 @@ We geven gegevens niet door aan anderen, met uitzondering van de diensten die no
 zijn om de app te laten werken. Die verwerken de gegevens alleen in onze opdracht:
 
 - **Supabase** — de database en het inlogsysteem. De gegevens staan op servers in
-  **[REGIO, zie de toelichting hieronder]**.
+  Ierland, binnen de Europese Unie.
 - **Google Workspace** — verstuurt de e-mails voor het bevestigen van een account en
   het herstellen van een wachtwoord.
 - **Expo** — levert de app-updates. Hierbij wordt het installatienummer gebruikt dat
@@ -92,7 +92,7 @@ zij met je gegevens doen, geldt hun eigen privacybeleid.
 
 - **Zolang iemand lid is**, bewaren we zijn voortgang.
 - **Gaat iemand van de groep af**, dan blijft zijn voortgang bewaard, zodat hij bij
-  terugkeer kan verdergaan waar hij was. Na **[BEWAARTERMIJN]** zonder lidmaatschap
+  terugkeer kan verdergaan waar hij was. Na **2 jaar** zonder lidmaatschap
   verwijderen we zijn gegevens.
 - **Vraag je om verwijdering**, dan verwijderen we je gegevens eerder; zie hieronder.
 
@@ -108,7 +108,7 @@ Je hebt het recht om:
 
 Voor een vaarder jonger dan 16 jaar kunnen ouders of verzorgers deze rechten uitoefenen.
 
-Stuur je verzoek naar **[E-MAILADRES VOOR PRIVACYVRAGEN]**. We reageren binnen een
+Stuur je verzoek naar **info@scoutingjwf.nl**. We reageren binnen een
 maand. Om te voorkomen dat iemand anders jouw gegevens opvraagt, kunnen we je vragen
 aan te tonen wie je bent.
 
