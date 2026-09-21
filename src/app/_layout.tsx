@@ -74,6 +74,11 @@ function Gate() {
           headerTintColor: t.text,
           headerShadowVisible: false,
           contentStyle: { backgroundColor: t.background },
+          // iOS zet de titel van het vorige scherm naast de terugpijl. Vanuit
+          // een tabblad is dat de groep "(tabs)", die geen titel heeft, en dan
+          // staat die interne naam in beeld. Overal "Terug" is duidelijker
+          // dan een wisselend label, ook vanuit gewone schermen.
+          headerBackTitle: 'Terug',
         }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="sign-in" options={{ headerShown: false }} />
