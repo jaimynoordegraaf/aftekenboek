@@ -130,6 +130,7 @@
       <button data-tab="leden" aria-current="true">Leden</button>
       <button data-tab="codes">Codes</button>
       <button data-tab="speltakken">Speltakken</button>
+      <button data-tab="bakken">Bakken</button>
       <button data-tab="catalogus">Diploma's en eisen</button>
     </nav>
     <span class="who" id="who"></span>
@@ -421,6 +422,7 @@ function render() {
   if (tab === 'leden') renderLeden(view);
   else if (tab === 'codes') renderCodes(view);
   else if (tab === 'speltakken') renderSpeltakken(view);
+  else if (tab === 'bakken') renderBakken(view);
   else renderCatalogus(view);
 }
 
@@ -658,6 +660,121 @@ async function renderSpeltakken(view) {
         },
       }, 'Verwijderen')));
   }
+}
+
+// ---- Bakken
+
+/**
+ * Wie er samen in een boot zit. In de app kies je onder "Op het water" een bak
+ * en zie je iedereen erin; hier deel je ze in, met een groter scherm en een
+ * toetsenbord.
+ *
+ * De bemanning komt uit crew_members, die op lidmaatschap hangt, en
+ * group_members geeft bij elke persoon zijn lidmaatschap mee. Zo zijn alle
+ * bakken met één keer ophalen te tellen, in plaats van één verzoek per bak.
+ */
+async function renderBakken(view) {
+  view.append(el('h2', {}, 'Bakken'));
+  view.append(el('p', { class: 'dim' },
+    'Een vaste bemanning voor het seizoen. In de app kies je onder "Op het water" een bak, een diploma en een eis, en zie je iedereen in die boot.'));
+
+  const nieuw = field('Nieuwe bak', '', {});
+  nieuw.input.placeholder = 'Vlet 1, Albatros, …';
+  view.append(el('div', { class: 'card row' }, nieuw.wrap,
+    el('button', {
+      class: 'btn',
+      onclick: async () => {
+        if (nieuw.input.value.trim().length < 2) return;
+        await run(async () => check(await db.from('crews').insert({
+          group_id: group.id, name: nieuw.input.value.trim(),
+        })), 'Bak toegevoegd');
+        render();
+      },
+    }, 'Toevoegen')));
+
+  const [crews, members, links] = await Promise.all([
+    run(async () => check(await db.from('crews').select('*')
+      .eq('group_id', group.id).order('sort_order').order('name'))),
+    run(async () => check(await db.rpc('group_members', { p_group: group.id }))),
+    run(async () => check(await db.from('crew_members').select('crew_id, membership_id'))),
+  ]);
+
+  if (!crews.length) {
+    view.append(el('p', { class: 'dim' }, 'Nog geen bakken.'));
+    return;
+  }
+
+  const profileOf = new Map(members.map((m) => [m.membership_id, m.profile_id]));
+  for (const c of crews) {
+    const aboard = new Set(
+      links.filter((l) => l.crew_id === c.id).map((l) => profileOf.get(l.membership_id)),
+    );
+    view.append(crewCard(c, members, aboard));
+  }
+}
+
+function crewCard(crew, members, aboard) {
+  const card = el('div', { class: 'card' });
+  const count = el('span', { class: 'dim' });
+  const chosen = new Set(aboard);
+
+  const paintCount = () => {
+    count.textContent = `${chosen.size} ${chosen.size === 1 ? 'opvarende' : 'opvarenden'}`;
+  };
+  paintCount();
+
+  const naam = el('input', { value: crew.name });
+
+  card.append(el('div', { class: 'row spread' },
+    el('div', { class: 'row grow' }, naam,
+      el('button', {
+        class: 'btn ghost',
+        onclick: async () => {
+          if (naam.value.trim().length < 2) return;
+          await run(async () => check(await db.from('crews')
+            .update({ name: naam.value.trim() }).eq('id', crew.id)), 'Naam opgeslagen');
+        },
+      }, 'Naam opslaan')),
+    count));
+
+  // Aanvinken en dan opslaan: een bemanning samenstellen is een handvol keuzes
+  // die bij elkaar horen, en set_crew_members vervangt de hele set in één keer.
+  const list = el('details', {}, el('summary', {}, 'Indelen'));
+  const boxes = el('div', { style: 'margin-top:10px; columns: 2 220px; column-gap: 24px' });
+  for (const m of members) {
+    const box = el('input', { type: 'checkbox', style: 'width:auto; margin:0' });
+    box.checked = chosen.has(m.profile_id);
+    box.addEventListener('change', () => {
+      if (box.checked) chosen.add(m.profile_id);
+      else chosen.delete(m.profile_id);
+      paintCount();
+    });
+    boxes.append(el('label', {
+      style: 'display:flex; gap:8px; align-items:center; font-size:14px; font-weight:400; color:var(--text); margin:0 0 8px; break-inside:avoid; cursor:pointer',
+    }, box, m.full_name || 'Naam nog niet ingevuld',
+      m.sections?.length ? el('span', { class: 'dim' }, `· ${m.sections.join(', ')}`) : null));
+  }
+  list.append(boxes);
+  list.append(el('div', { class: 'row', style: 'margin-top:12px' },
+    el('button', {
+      class: 'btn',
+      onclick: async () => {
+        await run(async () => check(await db.rpc('set_crew_members', {
+          p_crew: crew.id, p_profiles: [...chosen],
+        })), 'Indeling opgeslagen');
+      },
+    }, 'Indeling opslaan'),
+    el('button', {
+      class: 'btn danger',
+      onclick: async () => {
+        if (!confirmed(`${crew.name} verwijderen?\n\nDe vaarders en hun aftekeningen blijven bestaan; alleen de indeling verdwijnt.`)) return;
+        await run(async () => check(await db.from('crews').delete().eq('id', crew.id)), 'Bak verwijderd');
+        render();
+      },
+    }, 'Bak verwijderen')));
+
+  card.append(list);
+  return card;
 }
 
 // ---- Catalogus
