@@ -92,6 +92,7 @@ async function main() {
     '013-beheer.sql',
     '014-speltakken.sql',
     '015-leden-zonder-account.sql',
+    '016-bakken-en-standen.sql',
     '010-eisen.sql',
   ]) {
     try {
@@ -462,6 +463,128 @@ async function main() {
     Number(mine.theorie_done) === 0 && Number(mine.theorie_total) === 8,
     `${mine.theorie_done}/${mine.theorie_total}`);
   check('de discipline komt mee', mine.discipline_name === 'Roeien');
+
+  section('Drie standen');
+
+  const eis2 = (await one(`select id from requirements where code = 'roeien-12.p2'`)).id;
+  const progressOf = async () =>
+    Number(
+      (await as(wim, async () =>
+        (await db.query('select * from member_enrollments($1, $2)', [jwf, sam])).rows[0],
+      )).praktijk_done,
+    );
+
+  const bestaand = await one(
+    `select status from sign_offs where enrollment_id = '${samEnrollment}' and requirement_id = '${eis1}'`,
+  );
+  check('een bestaande aftekening is gehaald', bestaand?.status === 'gehaald',
+    bestaand?.status);
+
+  const voor = await progressOf();
+  await as(wim, () =>
+    db.query(`select set_sign_off_status($1, $2, 'behandeld', 'nog een keer bij meer wind')`,
+      [samEnrollment, eis2]),
+  );
+  check('behandeld onderweg telt niet mee', (await progressOf()) === voor,
+    `${voor} → ${await progressOf()}`);
+
+  await as(wim, () =>
+    db.query(`select set_sign_off_status($1, $2, 'gehaald', null)`, [samEnrollment, eis2]),
+  );
+  check('gehaald telt wel', (await progressOf()) === voor + 1, `${await progressOf()}`);
+
+  const bewaard = await one(
+    `select note from sign_offs where enrollment_id = '${samEnrollment}' and requirement_id = '${eis2}'`,
+  );
+  check('de notitie blijft staan bij een nieuwe stand',
+    bewaard?.note === 'nog een keer bij meer wind', bewaard?.note);
+
+  await as(wim, () =>
+    db.query(`select set_sign_off_status($1, $2, null, null)`, [samEnrollment, eis2]),
+  );
+  const weg = await one(
+    `select count(*)::int as n from sign_offs where enrollment_id = '${samEnrollment}' and requirement_id = '${eis2}'`,
+  );
+  check('niet behandeld haalt de rij weg', weg.n === 0, `${weg.n}`);
+
+  // De builds die nu op telefoons staan roepen nog de oude functie aan.
+  await as(wim, () =>
+    db.query(`select set_sign_off_status($1, $2, 'behandeld', null)`, [samEnrollment, eis2]),
+  );
+  await as(wim, () =>
+    db.query(`select set_sign_off($1, $2, true, null)`, [samEnrollment, eis2]),
+  );
+  const oud = await one(
+    `select status from sign_offs where enrollment_id = '${samEnrollment}' and requirement_id = '${eis2}'`,
+  );
+  check('de oude aan/uit-functie zet op gehaald', oud?.status === 'gehaald', oud?.status);
+  await as(wim, () =>
+    db.query(`select set_sign_off($1, $2, false, null)`, [samEnrollment, eis2]),
+  );
+
+  const lidStand = await refused(sam,
+    `select set_sign_off_status($1, $2, 'gehaald', null)`, [samEnrollment, eis2]);
+  check('een lid zet geen stand', lidStand !== null, 'het lukte wel');
+
+  section('Bakken');
+
+  const vlet = await as(wim, async () =>
+    (await db.query(
+      `insert into crews (group_id, name) values ($1, 'Vlet 1') returning id`, [jwf],
+    )).rows[0].id,
+  );
+  check('een instructeur maakt een bak', Boolean(vlet));
+
+  const lidBak = await refused(sam,
+    `insert into crews (group_id, name) values ($1, 'Eigen bak')`, [jwf]);
+  check('een lid maakt geen bak', lidBak !== null, 'het lukte wel');
+
+  const ingedeeld = await refused(wim, 'select set_crew_members($1, $2)', [vlet, [sam, nina]]);
+  check('een instructeur deelt de bak in', ingedeeld === null, ingedeeld ?? '');
+
+  const vreemdeling = await refused(wim, 'select set_crew_members($1, $2)', [vlet, [ander]]);
+  check('iemand van een andere groep kan er niet in', vreemdeling !== null, 'het lukte wel');
+
+  const bemanning = await as(wim, async () =>
+    (await db.query('select * from crew_roster($1)', [vlet])).rows,
+  );
+  check('de bak heeft twee opvarenden', bemanning.length === 2, `${bemanning.length}`);
+
+  const blad = await as(wim, async () =>
+    (await db.query('select * from crew_sheet($1, $2)', [vlet, eis1])).rows,
+  );
+  check('het overzicht toont iedereen in de bak', blad.length === 2, `${blad.length}`);
+  const samRij = blad.find((r) => r.profile_id === sam);
+  check('met de stand van wie al gehaald heeft', samRij?.status === 'gehaald',
+    samRij?.status);
+
+  // Nina is voor roeien ingeschreven; iemand die dat niet is komt er wel bij,
+  // maar zonder opleiding.
+  const kielboot1eis = (await one(`select id from requirements where code = 'kielboot-1.p1'`)).id;
+  const kielBlad = await as(wim, async () =>
+    (await db.query('select * from crew_sheet($1, $2)', [vlet, kielboot1eis])).rows,
+  );
+  check('wie niet ingeschreven is staat erbij zonder opleiding',
+    kielBlad.length === 2 && kielBlad.every((r) => r.enrollment_id === null),
+    JSON.stringify(kielBlad.map((r) => r.enrollment_id)));
+
+  const bakDiplomas = await as(wim, async () =>
+    (await db.query('select * from crew_diplomas($1)', [vlet])).rows,
+  );
+  check('de bak weet aan welke diploma’s hij werkt',
+    bakDiplomas.some((d) => d.diploma_name === 'Roeien I/II'),
+    JSON.stringify(bakDiplomas.map((d) => d.diploma_name)));
+
+  const bakVoorLid = await as(sam, async () =>
+    (await db.query('select * from crew_sheet($1, $2)', [vlet, eis1])).rows,
+  );
+  check('een lid krijgt het overzicht niet', bakVoorLid.length === 0, `${bakVoorLid.length}`);
+
+  const bakVoorVreemde = await as(ander, async () =>
+    (await db.query('select * from crews')).rows,
+  );
+  check('een andere groep ziet de bak niet', bakVoorVreemde.length === 0,
+    `${bakVoorVreemde.length}`);
 
   section('De catalogus is van de beheerder');
 

@@ -90,6 +90,9 @@ function Gate() {
           name="nieuw/lid"
           options={{ title: 'Lid toevoegen', presentation: 'modal' }}
         />
+        <Stack.Screen name="bak/[crew]/[req]" options={{ title: 'Bak' }} />
+        <Stack.Screen name="bakken/index" options={{ title: 'Bakken' }} />
+        <Stack.Screen name="bakken/[id]" options={{ title: 'Bak indelen' }} />
         <Stack.Screen name="beheer/index" options={{ title: 'Beheer' }} />
         <Stack.Screen name="beheer/leden" options={{ title: 'Rollen' }} />
         <Stack.Screen name="beheer/speltakken" options={{ title: 'Speltakken' }} />

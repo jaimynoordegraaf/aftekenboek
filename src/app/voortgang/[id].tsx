@@ -21,7 +21,7 @@ import {
   deleteEnrollment,
   fetchEnrollment,
   fetchSheet,
-  setSignOff,
+  setSignOffStatus,
   updateEnrollment,
   type EnrollmentDetail,
 } from '@/lib/api';
@@ -29,13 +29,20 @@ import { formatDay, today } from '@/lib/dates';
 import { useIsStaff } from '@/lib/session';
 import { useAsync } from '@/lib/use-async';
 import { useTheme } from '@/lib/use-theme';
-import { KIND_LABEL, type RequirementKind, type SheetRow } from '@/lib/types';
+import {
+  KIND_LABEL,
+  statusOf,
+  type RequirementKind,
+  type SheetRow,
+  type SignOffStatus,
+} from '@/lib/types';
 import { radius, space } from '@/theme';
 
 /**
  * The aftekenlijst — the screen the app exists for.
  *
- * Tapping a regel tekent hem af. It is applied on screen first and sent after,
+ * Tapping a regel moves it to the next stand (niet, onderweg, gehaald). It is
+ * applied on screen first and sent after,
  * because this is used on the water with a phone that has one bar of signal,
  * and an instructeur who taps three eisen in a row should not be watching
  * spinners. If the call fails the tick goes back and the error is shown.
@@ -83,18 +90,31 @@ export default function Aftekenlijst() {
 
   // Alleen de eisen tellen; onderdelen zijn een hulpmiddel, geen eis. Dezelfde
   // afspraak als in member_enrollments, anders spreken de balken elkaar tegen.
+  // Alleen gehaald telt, net als in de database. "Onderweg" is zichtbaar maar
+  // geen halve aftekening.
   const counts = useMemo(() => {
     const per = (k: RequirementKind) => {
       const all = rows.filter((r) => r.kind === k && !r.parent_id);
-      return { done: all.filter((r) => r.signed_at !== null).length, total: all.length };
+      return {
+        done: all.filter((r) => statusOf(r) === 'gehaald').length,
+        total: all.length,
+      };
     };
     return { praktijk: per('praktijk'), theorie: per('theorie') };
   }, [rows]);
 
+  /**
+   * Tikken loopt door de drie standen: niet → onderweg → gehaald → niet.
+   * In het overzicht van een bak kies je de stand direct; hier, in een lijst
+   * van tientallen eisen, zouden drie knoppen per regel de lijst onleesbaar
+   * maken.
+   */
   const toggle = useCallback(
-    async (row: SheetRow, note?: string | null) => {
+    async (row: SheetRow) => {
       if (!staff) return;
-      const next = row.signed_at === null;
+      const current = statusOf(row);
+      const next: SignOffStatus | null =
+        current === null ? 'behandeld' : current === 'behandeld' ? 'gehaald' : null;
 
       // Optimistic: paint it, then send it.
       sheet.patch(
@@ -102,9 +122,10 @@ export default function Aftekenlijst() {
           r.requirement_id === row.requirement_id
             ? {
                 ...r,
+                status: next,
                 signed_at: next ? new Date().toISOString() : null,
                 signed_by_name: next ? 'jij' : null,
-                note: next ? (note ?? r.note) : null,
+                note: next ? r.note : null,
               }
             : r,
         ),
@@ -113,7 +134,7 @@ export default function Aftekenlijst() {
       setFailure(null);
 
       try {
-        await setSignOff(id, row.requirement_id, next, note ?? row.note);
+        await setSignOffStatus(id, row.requirement_id, next);
         await sheet.reload();
       } catch (e) {
         setFailure(e);
@@ -199,7 +220,8 @@ export default function Aftekenlijst() {
 
         {staff ? (
           <Txt variant="small" dim>
-            Tik om af te tekenen. Houd een regel vast voor een notitie.
+            Tik om de stand te wisselen: niet, onderweg, gehaald. Houd een regel
+            vast voor een notitie.
           </Txt>
         ) : (
           <Txt variant="small" dim>
@@ -209,7 +231,7 @@ export default function Aftekenlijst() {
 
         <Card style={{ gap: 0 }}>
           {tree.map(({ eis, parts }, i) => {
-            const partsDone = parts.filter((p) => p.signed_at !== null).length;
+            const partsDone = parts.filter((p) => statusOf(p) === 'gehaald').length;
             const isOpen = open[eis.requirement_id] ?? false;
 
             return (
@@ -219,7 +241,8 @@ export default function Aftekenlijst() {
                   number={eis.position}
                   title={eis.title}
                   detail={eis.detail}
-                  checked={eis.signed_at !== null}
+                  checked={statusOf(eis) === 'gehaald'}
+                  partial={statusOf(eis) === 'behandeld'}
                   busy={pending[eis.requirement_id]}
                   disabled={!staff}
                   onPress={() => void toggle(eis)}
@@ -247,7 +270,8 @@ export default function Aftekenlijst() {
                             key={p.requirement_id}
                             number={p.position}
                             title={p.title}
-                            checked={p.signed_at !== null}
+                            checked={statusOf(p) === 'gehaald'}
+                            partial={statusOf(p) === 'behandeld'}
                             busy={pending[p.requirement_id]}
                             disabled={!staff}
                             onPress={() => void toggle(p)}
@@ -287,7 +311,7 @@ export default function Aftekenlijst() {
             // Saving a note re-signs the eis, so it lands on the name of
             // whoever wrote the note. That is the honest reading: the person
             // adding "nog een keer bij meer wind" is the one vouching for it.
-            await setSignOff(id, row.requirement_id, true, note);
+            await setSignOffStatus(id, row.requirement_id, statusOf(row) ?? 'gehaald', note ?? '');
           } catch (e) {
             setFailure(e);
           }
@@ -502,7 +526,7 @@ function NoteDialog({
 function signedLine(r: SheetRow): string | null {
   if (!r.signed_at) return null;
   return [
-    `Afgetekend ${formatDay(r.signed_at)}`,
+    `${statusOf(r) === 'behandeld' ? 'Onderweg sinds' : 'Gehaald'} ${formatDay(r.signed_at)}`,
     r.signed_by_name ? `door ${r.signed_by_name}` : null,
     r.note ? `— ${r.note}` : null,
   ]

@@ -9,6 +9,9 @@
 
 import { db } from './supabase';
 import type {
+  Crew,
+  CrewDiploma,
+  CrewSheetRow,
   Diploma,
   Discipline,
   DisciplineWithDiplomas,
@@ -19,6 +22,7 @@ import type {
   Role,
   Section,
   SheetRow,
+  SignOffStatus,
 } from './types';
 
 // ---------------------------------------------------------------- groep
@@ -181,6 +185,111 @@ export async function setSignOff(
     p_note: note ?? null,
   });
   if (error) throw error;
+}
+
+/**
+ * Eén eis op een stand zetten: 'behandeld', 'gehaald', of null voor niet
+ * behandeld. Een notitie blijft staan als je er geen nieuwe meegeeft; een lege
+ * string wist hem.
+ */
+export async function setSignOffStatus(
+  enrollmentId: string,
+  requirementId: string,
+  status: SignOffStatus | null,
+  note?: string | null,
+): Promise<void> {
+  const { error } = await db().rpc('set_sign_off_status', {
+    p_enrollment: enrollmentId,
+    p_requirement: requirementId,
+    p_status: status,
+    p_note: note ?? null,
+  });
+  if (error) throw error;
+}
+
+// ---------------------------------------------------------------- bakken
+
+export async function fetchCrews(groupId: string): Promise<Crew[]> {
+  const { data, error } = await db()
+    .from('crews')
+    .select('*')
+    .eq('group_id', groupId)
+    .order('sort_order')
+    .order('name');
+  if (error) throw error;
+  return (data ?? []) as Crew[];
+}
+
+export async function fetchCrew(crewId: string): Promise<Crew> {
+  const { data, error } = await db().from('crews').select('*').eq('id', crewId).single();
+  if (error) throw error;
+  return data as Crew;
+}
+
+export async function createCrew(groupId: string, name: string): Promise<void> {
+  const { error } = await db().from('crews').insert({ group_id: groupId, name: name.trim() });
+  if (error) throw error;
+}
+
+export async function deleteCrew(crewId: string): Promise<void> {
+  const { error } = await db().from('crews').delete().eq('id', crewId);
+  if (error) throw error;
+}
+
+/** Hoeveel mensen er in elke bak zitten, voor de lijst met bakken. */
+export async function fetchCrewSizes(): Promise<Record<string, number>> {
+  const { data, error } = await db().from('crew_members').select('crew_id');
+  if (error) throw error;
+  const sizes: Record<string, number> = {};
+  for (const row of data ?? []) {
+    sizes[row.crew_id] = (sizes[row.crew_id] ?? 0) + 1;
+  }
+  return sizes;
+}
+
+export async function fetchCrewRoster(
+  crewId: string,
+): Promise<{ profile_id: string; full_name: string }[]> {
+  const { data, error } = await db().rpc('crew_roster', { p_crew: crewId });
+  if (error) throw error;
+  return data ?? [];
+}
+
+/** De hele bemanning in één keer vervangen. */
+export async function setCrewMembers(crewId: string, profileIds: string[]): Promise<void> {
+  const { error } = await db().rpc('set_crew_members', {
+    p_crew: crewId,
+    p_profiles: profileIds,
+  });
+  if (error) throw error;
+}
+
+export async function fetchCrewDiplomas(crewId: string): Promise<CrewDiploma[]> {
+  const { data, error } = await db().rpc('crew_diplomas', { p_crew: crewId });
+  if (error) throw error;
+  return (data ?? []) as CrewDiploma[];
+}
+
+export async function fetchCrewSheet(
+  crewId: string,
+  requirementId: string,
+): Promise<CrewSheetRow[]> {
+  const { data, error } = await db().rpc('crew_sheet', {
+    p_crew: crewId,
+    p_requirement: requirementId,
+  });
+  if (error) throw error;
+  return (data ?? []) as CrewSheetRow[];
+}
+
+export async function fetchRequirement(requirementId: string): Promise<Requirement> {
+  const { data, error } = await db()
+    .from('requirements')
+    .select('*')
+    .eq('id', requirementId)
+    .single();
+  if (error) throw error;
+  return data as Requirement;
 }
 
 // ---------------------------------------------------------------- opleidingen

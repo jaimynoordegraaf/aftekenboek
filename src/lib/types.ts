@@ -3,6 +3,31 @@
 export type Role = 'beheerder' | 'instructeur' | 'lid';
 export type RequirementKind = 'praktijk' | 'theorie';
 
+/**
+ * De stand van één eis voor één persoon. Null is "niet behandeld": dan is er
+ * geen rij. Alleen 'gehaald' telt mee in de voortgang.
+ */
+export type SignOffStatus = 'behandeld' | 'gehaald';
+
+export const STATUS_LABEL: Record<'niet' | SignOffStatus, string> = {
+  niet: 'Niet behandeld',
+  behandeld: 'Onderweg',
+  gehaald: 'Gehaald',
+};
+
+/**
+ * De stand van een rij, ook als de database nog geen status meestuurt. Op een
+ * project waar 016-bakken-en-standen.sql nog niet gedraaid heeft ontbreekt het
+ * veld; een aftekening betekende toen altijd "gehaald".
+ */
+export function statusOf(row: {
+  signed_at: string | null;
+  status?: SignOffStatus | null;
+}): SignOffStatus | null {
+  if (!row.signed_at) return null;
+  return row.status ?? 'gehaald';
+}
+
 /** The roles that may aftekenen and see everyone's voortgang. */
 export const STAFF_ROLES: readonly Role[] = ['beheerder', 'instructeur'];
 
@@ -149,6 +174,38 @@ export type SheetRow = {
   detail: string | null;
   signed_at: string | null;
   signed_by: string | null;
+  signed_by_name: string | null;
+  note: string | null;
+  /** Ontbreekt op een database zonder 016; lees hem via statusOf(). */
+  status?: SignOffStatus | null;
+};
+
+// ---------------------------------------------------------------- bakken
+
+/** Een vaste bemanning voor het seizoen: wie er samen in een boot zit. */
+export type Crew = {
+  id: string;
+  group_id: string;
+  name: string;
+  sort_order: number;
+};
+
+/** Een diploma waar iemand in een bak mee bezig is: `crew_diplomas()`. */
+export type CrewDiploma = {
+  diploma_id: string;
+  diploma_name: string;
+  discipline_name: string;
+  enrolled: number;
+};
+
+/** Eén opvarende en zijn stand op één eis: `crew_sheet()`. */
+export type CrewSheetRow = {
+  profile_id: string;
+  full_name: string;
+  /** Null als hij niet voor dit diploma is ingeschreven. */
+  enrollment_id: string | null;
+  status: SignOffStatus | null;
+  signed_at: string | null;
   signed_by_name: string | null;
   note: string | null;
 };

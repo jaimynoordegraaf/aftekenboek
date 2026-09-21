@@ -65,6 +65,15 @@ export const AnchorIcon = (p: IconProps) => (
   </Frame>
 );
 
+/** Het overzicht op het water: een boot. */
+export const BoatIcon = (p: IconProps) => (
+  <Frame {...p}>
+    <Path d="M12 3v12" />
+    <Path d="M12 4l6 9h-6" />
+    <Path d="M3 16h18l-2.5 4h-13z" />
+  </Frame>
+);
+
 export const MoreIcon = (p: IconProps) => (
   <Frame {...p}>
     <Path d="M4 7h16M4 12h16M4 17h10" />

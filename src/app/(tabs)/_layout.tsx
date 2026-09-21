@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 
-import { AnchorIcon, BookIcon, MoreIcon, PeopleIcon } from '@/components/icons';
+import { AnchorIcon, BoatIcon, BookIcon, MoreIcon, PeopleIcon } from '@/components/icons';
 import { useIsStaff } from '@/lib/session';
 import { useTheme } from '@/lib/use-theme';
 
@@ -34,6 +34,17 @@ export default function TabsLayout() {
             ) : (
               <AnchorIcon color={color} strokeWidth={focused ? 2.2 : 1.8} />
             ),
+        }}
+      />
+      <Tabs.Screen
+        name="overzicht"
+        options={{
+          title: 'Op het water',
+          // Alleen voor wie aftekent: een lid heeft niets aan een bak-overzicht.
+          href: staff ? '/overzicht' : null,
+          tabBarIcon: ({ color, focused }) => (
+            <BoatIcon color={color} strokeWidth={focused ? 2.2 : 1.8} />
+          ),
         }}
       />
       <Tabs.Screen

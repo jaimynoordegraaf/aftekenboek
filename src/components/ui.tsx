@@ -391,6 +391,7 @@ export function CheckRow({
   detail,
   signedLine,
   checked,
+  partial,
   onPress,
   onLongPress,
   disabled,
@@ -400,14 +401,21 @@ export function CheckRow({
   title: string;
   detail?: string | null;
   signedLine?: string | null;
+  /** Gehaald. */
   checked: boolean;
+  /** Behandeld onderweg: wel aan gewerkt, nog niet gehaald. */
+  partial?: boolean;
   onPress?: () => void;
   onLongPress?: () => void;
   disabled?: boolean;
   busy?: boolean;
 }) {
   const t = useTheme();
+  const half = !checked && !!partial;
 
+  // Gehaald is een gevuld groen vakje met een vinkje; onderweg een oranje rand
+  // met een streep. Niet alleen de kleur verschilt maar ook het teken, zodat
+  // het ook te lezen is voor wie rood en groen slecht uit elkaar houdt.
   const box = (
     <View
       style={{
@@ -415,7 +423,7 @@ export function CheckRow({
         height: 26,
         borderRadius: radius.sm,
         borderWidth: 2,
-        borderColor: checked ? t.good : t.border,
+        borderColor: checked ? t.good : half ? t.warn : t.border,
         backgroundColor: checked ? t.good : 'transparent',
         alignItems: 'center',
         justifyContent: 'center',
@@ -425,6 +433,10 @@ export function CheckRow({
       ) : checked ? (
         <Text style={{ color: t.dark ? '#101210' : '#FFFFFF', fontSize: 15, fontWeight: '900' }}>
           ✓
+        </Text>
+      ) : half ? (
+        <Text style={{ color: t.warn, fontSize: 18, fontWeight: '900', lineHeight: 20 }}>
+          –
         </Text>
       ) : null}
     </View>
@@ -451,7 +463,7 @@ export function CheckRow({
           </Txt>
         ) : null}
         {signedLine ? (
-          <Txt variant="small" color={t.good}>
+          <Txt variant="small" color={half ? t.warn : t.good}>
             {signedLine}
           </Txt>
         ) : null}
@@ -464,7 +476,7 @@ export function CheckRow({
   return (
     <Pressable
       accessibilityRole="checkbox"
-      accessibilityState={{ checked, disabled: !!disabled }}
+      accessibilityState={{ checked: checked ? true : half ? 'mixed' : false, disabled: !!disabled }}
       accessibilityLabel={`${number}. ${title}`}
       onPress={onPress}
       onLongPress={onLongPress}
@@ -609,5 +621,83 @@ export function LinkRow({
         <Text style={{ color: t.textDim, fontSize: 18 }}>›</Text>
       </Row>
     </Pressable>
+  );
+}
+
+/**
+ * De drie standen naast elkaar: niet behandeld, onderweg, gehaald.
+ *
+ * Voor het overzicht van een bak, waar je vijf mensen achter elkaar een stand
+ * geeft. Eén tik zet precies de stand die je bedoelt, in plaats van rond te
+ * tikken tot hij goed staat — met natte handen in een deinende boot is dat het
+ * verschil. Groot genoeg om te raken: 44pt hoog.
+ */
+export function StatusPicker({
+  value,
+  onChange,
+  disabled,
+  busy,
+}: {
+  value: 'behandeld' | 'gehaald' | null;
+  onChange: (next: 'behandeld' | 'gehaald' | null) => void;
+  disabled?: boolean;
+  busy?: boolean;
+}) {
+  const t = useTheme();
+  const onFill = t.dark ? '#101210' : '#FFFFFF';
+
+  const options: {
+    value: 'behandeld' | 'gehaald' | null;
+    label: string;
+    fill: string;
+  }[] = [
+    { value: null, label: 'Niet', fill: t.textDim },
+    { value: 'behandeld', label: 'Onderweg', fill: t.warn },
+    { value: 'gehaald', label: 'Gehaald', fill: t.good },
+  ];
+
+  return (
+    <View
+      accessibilityRole="radiogroup"
+      style={{
+        flexDirection: 'row',
+        gap: space.xs,
+        opacity: disabled ? 0.5 : busy ? 0.7 : 1,
+      }}>
+      {options.map((o) => {
+        const on = o.value === value;
+        return (
+          <Pressable
+            key={o.label}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: on, disabled: !!disabled }}
+            accessibilityLabel={o.label}
+            disabled={disabled || busy}
+            onPress={() => {
+              if (!on) onChange(o.value);
+            }}
+            style={({ pressed }) => ({
+              flex: 1,
+              minHeight: 44,
+              borderRadius: radius.md,
+              borderWidth: 1.5,
+              borderColor: on ? o.fill : t.border,
+              backgroundColor: on ? o.fill : 'transparent',
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: pressed ? 0.7 : 1,
+            })}>
+            <Text
+              style={{
+                color: on ? onFill : t.textDim,
+                fontSize: 14,
+                fontWeight: '700',
+              }}>
+              {o.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }
