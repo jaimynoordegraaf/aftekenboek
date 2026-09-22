@@ -1,4 +1,9 @@
-# Aftekenboek
+# Vinkje
+
+*Heette tot september 2026 Aftekenboek.* Achter de schermen heet hij nog steeds
+zo: de map, het Expo-project, de app-id `com.scoutingjwf.aftekenboek` en het
+linkschema `aftekenboek://`. Die liggen vast bij Apple en Google of staan in al
+verstuurde mails, en niemand ziet ze. Alleen de naam die mensen lezen is Vinkje.
 
 De vorderingenstaat voor de Watersport Academy-diploma's van een Scoutinggroep,
 als app voor iOS en Android. Een instructeur tekent op de steiger per eis af;

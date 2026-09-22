@@ -1,15 +1,15 @@
-# Privacybeleid Aftekenboek
+# Privacybeleid Vinkje
 
-*Laatst bijgewerkt: 21 september 2026*
+*Laatst bijgewerkt: 22 september 2026*
 
-Aftekenboek is een app waarmee instructeurs van Scouting Jan Willem Friso bijhouden
+Vinkje is een app waarmee instructeurs van Scouting Jan Willem Friso bijhouden
 hoe ver vaarders zijn met hun watersportdiploma's. In dit privacybeleid staat welke
 gegevens de app gebruikt, waarom, wie ze kan zien, hoe lang ze bewaard worden en wat
 je rechten zijn.
 
 ## Wie is verantwoordelijk
 
-Scouting Jan Willem Friso is verantwoordelijk voor de gegevens in Aftekenboek.
+Scouting Jan Willem Friso is verantwoordelijk voor de gegevens in Vinkje.
 
 - Adres: Toepad 1, 2921 AZ Krimpen aan den IJssel
 - Vragen over privacy: **info@scoutingjwf.nl**
@@ -44,7 +44,7 @@ in de app. Van hen gebruiken we geen e-mailadres en geen andere contactgegevens.
   installatie hoort naar Expo, de dienst die de updates levert. Dat nummer zegt niets
   over wie je bent.
 
-**Wat we níet doen:** Aftekenboek bevat geen advertenties, geen analysediensten en
+**Wat we níet doen:** Vinkje bevat geen advertenties, geen analysediensten en
 geen trackers, en verkoopt of deelt geen gegevens voor marketing.
 
 ## Waarom we deze gegevens gebruiken

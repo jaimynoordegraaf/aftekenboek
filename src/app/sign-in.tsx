@@ -99,7 +99,7 @@ export default function SignIn() {
       <PlainScreen>
         <View style={{ gap: space.xs, marginTop: space.xxl, marginBottom: space.lg }}>
           <Txt variant="title">
-            {mode === 'reset' ? 'Wachtwoord vergeten' : 'Aftekenboek'}
+            {mode === 'reset' ? 'Wachtwoord vergeten' : 'Vinkje'}
           </Txt>
           <Txt dim>{lead}</Txt>
         </View>

@@ -79,7 +79,7 @@ Google verstuurd wordt komt meteen goed aan. Geen DNS-wijziging nodig.
     Username        het volledige adres waarvandaan verstuurd wordt
     Password        een Google app-wachtwoord van zestien tekens
     Sender email    hetzelfde adres als de username
-    Sender name     Scouting JWF Aftekenboek
+    Sender name     Scouting JWF Vinkje
 
 Drie dingen die hier misgaan:
 

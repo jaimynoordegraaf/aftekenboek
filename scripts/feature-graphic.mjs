@@ -49,7 +49,7 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" 
   <rect x="96" y="120" width="260" height="260" rx="58" fill="#FFFFFF" fill-opacity="0.18"/>
   ${glyph(226, 250, 0.33)}
 
-  <text x="404" y="232" font-family="AXIS" font-weight="800" font-size="62" fill="${INK}">Aftekenboek</text>
+  <text x="404" y="232" font-family="AXIS" font-weight="800" font-size="62" fill="${INK}">Vinkje</text>
   <text x="406" y="296" font-family="Segoe UI" font-weight="600" font-size="27" fill="${INK}">Watersportdiploma's, eis voor eis afgetekend</text>
   <text x="406" y="346" font-family="Segoe UI" font-size="23" fill="${INK}" fill-opacity="0.8">Scouting Jan Willem Friso</text>
 </svg>`;

@@ -89,7 +89,7 @@ await writeFile(
 
 await writeFile(
   join(out, 'LEESMIJ.txt'),
-  `Beheerpagina Aftekenboek
+  `Beheerpagina Vinkje
 ========================
 
 Upload de inhoud van deze map naar een submap van je website, bijvoorbeeld:
