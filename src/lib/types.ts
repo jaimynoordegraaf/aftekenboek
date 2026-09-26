@@ -98,9 +98,19 @@ export type Discipline = {
   sort_order: number;
 };
 
+/**
+ * Een lijst is een diploma of een insigne. Landelijke lijsten zijn altijd een
+ * diploma; een eigen lijst kiest zelf.
+ */
+export type ListKind = 'diploma' | 'insigne';
+
 export type Diploma = {
   id: string;
-  discipline_id: string;
+  /** Null bij een eigen lijst: die hangt niet onder een landelijke discipline. */
+  discipline_id: string | null;
+  /** Null als de lijst landelijk is, anders de groep die hem bezit. */
+  group_id: string | null;
+  kind: ListKind;
   code: string;
   name: string;
   level_label: string | null;

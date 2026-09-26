@@ -2,6 +2,7 @@ import { RefreshControl, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import {
+  Button,
   Card,
   Divider,
   ErrorNote,
@@ -11,6 +12,7 @@ import {
   Txt,
 } from '@/components/ui';
 import { fetchCatalogue } from '@/lib/api';
+import { useIsStaff } from '@/lib/session';
 import { useAsync } from '@/lib/use-async';
 import { space } from '@/theme';
 
@@ -20,6 +22,7 @@ import { space } from '@/theme';
  */
 export default function Diplomas() {
   const router = useRouter();
+  const staff = useIsStaff();
   const { data, loading, refreshing, error, reload } = useAsync(fetchCatalogue, []);
 
   if (loading) return <Loading />;
@@ -32,7 +35,8 @@ export default function Diplomas() {
 
         <Txt variant="small" dim>
           De eisen zijn landelijk vastgesteld door de Watersport Academy en voor
-          iedere groep gelijk.
+          iedere groep gelijk. Wat we daarnaast zelf aftekenen — een insigne, of
+          verkorte eisen voor een kamp — staat onderaan als eigen lijst.
         </Txt>
 
         {(data ?? []).map((d) => (
@@ -60,6 +64,14 @@ export default function Diplomas() {
             </Card>
           </View>
         ))}
+
+        {staff ? (
+          <Button
+            variant="secondary"
+            label="Eigen lijst maken"
+            onPress={() => router.push('/eigen/nieuw')}
+          />
+        ) : null}
       </View>
     </Screen>
   );

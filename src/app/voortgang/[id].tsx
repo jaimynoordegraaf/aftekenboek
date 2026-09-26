@@ -178,7 +178,7 @@ export default function Aftekenlijst() {
       <View style={{ gap: space.lg }}>
         <View style={{ gap: space.xs }}>
           <Txt variant="small" dim>
-            {e.member.full_name} · {e.discipline.name}
+            {e.member.full_name} · {e.discipline?.name ?? (e.diploma.kind === 'insigne' ? 'Eigen insigne' : 'Eigen lijst')}
           </Txt>
           <Txt variant="title">{e.diploma.name}</Txt>
         </View>

@@ -126,3 +126,29 @@ ene tijdelijk een hoog nummer, draai, zet hem daarna goed.
 - **Instructeursdiploma's** (I-2, I-3, I-4) en de PvB's die daarbij horen.
 - **Het landelijke theorie-examen zelf.** De app houdt alleen de datum bij
   waarop iemand slaagde, en rekent daar de geldigheid van 18 maanden overheen.
+
+## Eigen lijsten naast de landelijke
+
+Sinds 018 kan een groep zijn eigen lijsten maken: een insigne (bemanningslid),
+of de verkorte eisen waarmee een vlet op kamp werkt. Ze staan in dezelfde
+tabellen, met één verschil:
+
+    group_id is null      landelijk. Van niemand, voor iedereen zichtbaar, en
+                          alleen te wijzigen door dit bestand opnieuw te draaien.
+    group_id is not null  van één groep. Alleen die groep ziet hem; zijn
+                          instructeurs en beheerders mogen hem bewerken.
+
+Een eigen lijst is een `diploma` of een `insigne` (`diplomas.kind`) en hangt
+onder geen enkele landelijke discipline — in de app staat hij onder een eigen
+kopje. Aftekenen, voortgang en bakken werken er precies zo op als op een
+landelijk diploma.
+
+Je maakt er een in de app (Diploma's › Eigen lijst maken) of op de beheerpagina,
+leeg of als kopie van een bestaande lijst. Die kopie staat helemaal los: eruit
+schrappen laat het origineel heel.
+
+**De landelijke lijst is sinds 018 weer alleen-lezen**, ook voor een beheerder.
+Tussen 013 en 018 kon die vanaf de beheerpagina bewerkt worden, en dat was te
+ruim: de wijziging gold voor élke groep in de database, en dit bestand
+overschreef hem bij de volgende run toch. Correcties op de landelijke eisen
+horen dus hier, in `010-eisen.sql`.

@@ -44,6 +44,8 @@ project dat al bestaat:
     016-bakken-en-standen.sql bakken, en aftekenen in drie standen
     017-account-verwijderen.sql
                               je eigen account verwijderen vanuit de app
+    018-eigen-lijsten.sql     eigen eisenlijsten naast de landelijke catalogus;
+                              landelijk wordt weer alleen-lezen
 
 `010-eisen.sql` draait **als laatste**, ook al is zijn nummer lager. De catalogus
 hangt aan elke schemawijziging die erna genummerd is, dus hij wordt steeds

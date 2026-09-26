@@ -17,8 +17,10 @@ import type {
   DisciplineWithDiplomas,
   EnrollmentRow,
   Invite,
+  ListKind,
   MemberRow,
   Requirement,
+  RequirementKind,
   Role,
   Section,
   SheetRow,
@@ -143,7 +145,7 @@ export async function fetchEnrollment(enrollmentId: string): Promise<EnrollmentD
     note: row.note,
     member: row.profiles as { id: string; full_name: string },
     diploma: diploma as Diploma,
-    discipline: disciplines as Discipline,
+    discipline: (disciplines ?? null) as Discipline | null,
   };
 }
 
@@ -157,7 +159,8 @@ export type EnrollmentDetail = {
   note: string | null;
   member: { id: string; full_name: string };
   diploma: Diploma;
-  discipline: Discipline;
+  /** Null bij een eigen lijst. */
+  discipline: Discipline | null;
 };
 
 export async function fetchSheet(enrollmentId: string): Promise<SheetRow[]> {
@@ -343,15 +346,37 @@ export async function fetchCatalogue(): Promise<DisciplineWithDiplomas[]> {
   if (diplomas.error) throw diplomas.error;
 
   const all = (diplomas.data ?? []) as Diploma[];
-  return ((disciplines.data ?? []) as Discipline[]).map((d) => ({
+  const landelijk = ((disciplines.data ?? []) as Discipline[]).map((d) => ({
     ...d,
     diplomas: all.filter((dip) => dip.discipline_id === d.id),
   }));
+
+  // Eigen lijsten hangen aan geen enkele landelijke discipline. Ze krijgen hier
+  // hun eigen kopje, zodat het bemanningslid-insigne niet tussen de CWO-diploma's
+  // verdwijnt. De id is een verzonnen sleutel voor de lijst op het scherm, geen rij.
+  // Let op de dubbele ontkenning: draait de update vóór de migratie, dan bestaat
+  // de kolom nog niet en is group_id undefined. Dan is niets een eigen lijst,
+  // in plaats van alles.
+  const eigen = all.filter((dip) => !!dip.group_id);
+  const eigenGroep = (kind: ListKind, name: string, subtitle: string) => ({
+    id: `eigen-${kind}`,
+    code: `eigen-${kind}`,
+    name,
+    subtitle,
+    sort_order: 90,
+    diplomas: eigen.filter((dip) => dip.kind === kind),
+  });
+
+  return [
+    ...landelijk,
+    eigenGroep('diploma', 'Eigen lijsten', 'Van onze groep, niet landelijk'),
+    eigenGroep('insigne', 'Insignes', 'Van onze groep'),
+  ].filter((g) => g.diplomas.length > 0);
 }
 
 export async function fetchDiploma(
   diplomaId: string,
-): Promise<{ diploma: Diploma; discipline: Discipline; requirements: Requirement[] }> {
+): Promise<{ diploma: Diploma; discipline: Discipline | null; requirements: Requirement[] }> {
   const [diploma, requirements] = await Promise.all([
     db().from('diplomas').select('*, disciplines(*)').eq('id', diplomaId).single(),
     db()
@@ -367,7 +392,7 @@ export async function fetchDiploma(
   const { disciplines, ...rest } = diploma.data as any;
   return {
     diploma: rest as Diploma,
-    discipline: disciplines as Discipline,
+    discipline: (disciplines ?? null) as Discipline | null,
     requirements: (requirements.data ?? []) as Requirement[],
   };
 }
@@ -513,5 +538,121 @@ export async function updateMyName(userId: string, fullName: string): Promise<vo
  */
 export async function deleteMyAccount(): Promise<void> {
   const { error } = await db().rpc('delete_my_account');
+  if (error) throw error;
+}
+
+// ---------------------------------------------------------- eigen lijsten
+//
+// Een eigen lijst is een diploma of insigne van de groep zelf: het
+// bemanningslid-insigne, of een verkorte vletlijst voor een kamp. De database
+// laat alleen instructeurs en beheerders van díe groep erbij; de landelijke
+// eisen blijven voor iedereen alleen-lezen.
+
+/** Een lege lijst, om zelf vol te zetten. */
+export async function createOwnList(
+  groupId: string,
+  name: string,
+  kind: ListKind = 'diploma',
+  summary?: string,
+): Promise<string> {
+  const { data, error } = await db().rpc('create_own_list', {
+    p_group: groupId,
+    p_name: name,
+    p_kind: kind,
+    p_summary: summary ?? null,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
+/**
+ * Een bestaande lijst overnemen om daarna in te korten. De kopie staat los van
+ * het origineel: schrappen raakt de landelijke lijst niet.
+ */
+export async function copyListToGroup(
+  groupId: string,
+  sourceId: string,
+  name?: string,
+  kind: ListKind = 'diploma',
+): Promise<string> {
+  const { data, error } = await db().rpc('copy_list_to_group', {
+    p_group: groupId,
+    p_source: sourceId,
+    p_name: name ?? null,
+    p_kind: kind,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
+export async function updateOwnList(
+  diplomaId: string,
+  name: string,
+  kind?: ListKind,
+  summary?: string,
+): Promise<void> {
+  const { error } = await db().rpc('update_own_list', {
+    p_diploma: diplomaId,
+    p_name: name,
+    p_kind: kind ?? null,
+    p_summary: summary ?? null,
+  });
+  if (error) throw error;
+}
+
+export async function deleteOwnList(diplomaId: string): Promise<void> {
+  const { error } = await db().rpc('delete_own_list', { p_diploma: diplomaId });
+  if (error) throw error;
+}
+
+export async function addOwnRequirement(
+  diplomaId: string,
+  kind: RequirementKind,
+  title: string,
+  detail?: string,
+  parentId?: string,
+): Promise<string> {
+  const { data, error } = await db().rpc('add_own_requirement', {
+    p_diploma: diplomaId,
+    p_kind: kind,
+    p_title: title,
+    p_detail: detail ?? null,
+    p_parent: parentId ?? null,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
+export async function updateOwnRequirement(
+  requirementId: string,
+  title: string,
+  detail?: string,
+): Promise<void> {
+  const { error } = await db().rpc('update_own_requirement', {
+    p_requirement: requirementId,
+    p_title: title,
+    p_detail: detail ?? null,
+  });
+  if (error) throw error;
+}
+
+export async function deleteOwnRequirement(requirementId: string): Promise<void> {
+  const { error } = await db().rpc('delete_own_requirement', { p_requirement: requirementId });
+  if (error) throw error;
+}
+
+/** De hele volgorde in één keer, zoals hij op het scherm staat. */
+export async function setOwnRequirementOrder(
+  diplomaId: string,
+  kind: RequirementKind,
+  parentId: string | null,
+  ids: string[],
+): Promise<void> {
+  const { error } = await db().rpc('set_own_requirement_order', {
+    p_diploma: diplomaId,
+    p_kind: kind,
+    p_parent: parentId,
+    p_ids: ids,
+  });
   if (error) throw error;
 }

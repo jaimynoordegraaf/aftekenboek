@@ -94,6 +94,7 @@ async function main() {
     '015-leden-zonder-account.sql',
     '016-bakken-en-standen.sql',
     '017-account-verwijderen.sql',
+    '018-eigen-lijsten.sql',
     '010-eisen.sql',
   ]) {
     try {
@@ -154,8 +155,8 @@ async function main() {
   // afspraak achter 012-onderdelen.sql.
   const roeien = await one(`
     select
-      count(*) filter (where kind = 'praktijk')::int as p,
-      count(*) filter (where kind = 'theorie')::int  as t
+      count(*) filter (where r.kind = 'praktijk')::int as p,
+      count(*) filter (where r.kind = 'theorie')::int  as t
     from requirements r
     join diplomas d on d.id = r.diploma_id
     where d.code = 'roeien-12' and r.parent_id is null
@@ -587,32 +588,34 @@ async function main() {
   check('een andere groep ziet de bak niet', bakVoorVreemde.length === 0,
     `${bakVoorVreemde.length}`);
 
-  section('De catalogus is van de beheerder');
+  section('De landelijke catalogus is van niemand');
 
-  // Sinds 013 mag een beheerder de eisen bijwerken vanuit de beheerpagina —
-  // anders blijft de sloep/motorvlet-lijst een SQL-plakoefening.
-  const byAdmin = await refused(
+  // 013 gaf elke beheerder de hele catalogus. Sinds 018 niet meer: een
+  // wijziging daar zou élke groep in deze database raken, en 010-eisen.sql
+  // overschrijft hem toch weer. Eigen eisen horen in een eigen lijst.
+  await refused(
     wim,
     `update requirements set title = 'Bijgewerkt' where code = 'roeien-12.p1'`,
   );
   const changed = await one(`select title from requirements where code = 'roeien-12.p1'`);
-  check('een beheerder mag een eis bijwerken',
-    byAdmin === null && changed.title === 'Bijgewerkt',
-    `${byAdmin ?? changed.title}`);
+  check('een beheerder kan een landelijke eis niet bijwerken',
+    changed.title === 'Het schip vaarklaar en nachtklaar maken', changed.title);
 
-  // ... en niemand anders.
   await refused(
     sam,
     `update requirements set title = 'Door een lid' where code = 'roeien-12.p1'`,
   );
   const afterLid = await one(`select title from requirements where code = 'roeien-12.p1'`);
-  check('een lid niet', afterLid.title === 'Bijgewerkt', afterLid.title);
+  check('een lid al helemaal niet',
+    afterLid.title === 'Het schip vaarklaar en nachtklaar maken', afterLid.title);
 
-  await as(wim, () =>
-    db.query(`update requirements set title = $1 where code = 'roeien-12.p1'`, [
-      'Het schip vaarklaar en nachtklaar maken',
-    ]),
+  await refused(
+    wim,
+    `insert into diplomas (discipline_id, code, name)
+     select id, 'gekaapt', 'Gekaapt' from disciplines limit 1`,
   );
+  const landelijkAantal = await one('select count(*)::int as n from diplomas where group_id is null');
+  check('en er komt geen landelijk diploma bij', landelijkAantal.n === 12, `${landelijkAantal.n}`);
 
   await refused(
     sam,
@@ -873,6 +876,188 @@ async function main() {
 
   const zonderLogin = await refused('', 'select delete_my_account()');
   check('niet ingelogd verwijdert niets', zonderLogin !== null, 'het lukte wel');
+
+  section('Eigen eisenlijsten');
+
+  const kamp = await newUser('kamp@voorbeeld.nl', 'Kampinstructeur');
+  await db.exec(
+    `insert into memberships (group_id, profile_id, role) values ('${jwf}', '${kamp}', 'instructeur')`,
+  );
+
+  // Een insigne dat nergens op lijkt: leeg beginnen.
+  const insigne = (
+    await as(kamp, () =>
+      db.query(`select create_own_list($1, 'Bemanningslid', 'insigne', null) as id`, [jwf]),
+    )
+  ).rows[0].id;
+  check('een instructeur maakt een eigen lijst', !!insigne, String(insigne));
+
+  const vaarder = await newUser('vaarder@voorbeeld.nl', 'Gewoon Lid');
+  await db.exec(
+    `insert into memberships (group_id, profile_id, role) values ('${jwf}', '${vaarder}', 'lid')`,
+  );
+  const lidMaakt = await refused(vaarder, `select create_own_list($1, 'Van een lid')`, [jwf]);
+  check('een lid mag dat niet', lidMaakt !== null, 'het lukte wel');
+
+  const zietAnder = await as(ander, () =>
+    one(`select count(*)::int as n from diplomas where id = '${insigne}'`),
+  );
+  check('een andere groep ziet hem niet', zietAnder.n === 0, `${zietAnder.n}`);
+  const zietEigen = await as(kamp, () =>
+    one(`select count(*)::int as n from diplomas where id = '${insigne}'`),
+  );
+  check('de eigen groep wel', zietEigen.n === 1, `${zietEigen.n}`);
+
+  // De verkorte vletlijst: kopie van een landelijk diploma.
+  const kopie = (
+    await as(kamp, () =>
+      db.query(`select copy_list_to_group($1, $2, 'Vlet herfstkamp') as id`, [jwf, roeien12]),
+    )
+  ).rows[0].id;
+  const bron = await one(
+    `select count(*) filter (where parent_id is null)::int as eisen,
+            count(*) filter (where parent_id is not null)::int as onderdelen
+     from requirements where diploma_id = '${roeien12}'`,
+  );
+  const kop = await one(
+    `select count(*) filter (where parent_id is null)::int as eisen,
+            count(*) filter (where parent_id is not null)::int as onderdelen
+     from requirements where diploma_id = '${kopie}'`,
+  );
+  check('de kopie heeft evenveel eisen', kop.eisen === bron.eisen, `${kop.eisen} vs ${bron.eisen}`);
+  check('en evenveel onderdelen', kop.onderdelen === bron.onderdelen,
+    `${kop.onderdelen} vs ${bron.onderdelen}`);
+
+  // Hangen de onderdelen aan dezelfde eis als in het origineel?
+  const verkeerdeOuder = await one(
+    `select count(*)::int as n
+     from requirements k
+     join requirements ko on ko.id = k.parent_id
+     where k.diploma_id = '${kopie}' and k.parent_id is not null
+       and not exists (
+         select 1 from requirements b
+         join requirements bo on bo.id = b.parent_id
+         where b.diploma_id = '${roeien12}' and b.title = k.title and bo.title = ko.title
+       )`,
+  );
+  check('elk onderdeel hangt aan dezelfde eis als in het origineel', verkeerdeOuder.n === 0,
+    `${verkeerdeOuder.n} verkeerd`);
+
+  // Inkorten in de kopie, en kijken of het origineel heel blijft.
+  const schrap = await one(
+    `select id from requirements where diploma_id = '${kopie}' and parent_id is null
+       and kind = 'praktijk' and "position" = 2`,
+  );
+  const geschrapt = await refused(kamp, `select delete_own_requirement($1)`, [schrap.id]);
+  check('een eis uit de eigen kopie schrappen', geschrapt === null, geschrapt ?? '');
+  const naSchrap = await one(
+    `select count(*)::int as n from requirements where diploma_id = '${roeien12}' and parent_id is null`,
+  );
+  check('de landelijke lijst blijft heel', naSchrap.n === bron.eisen, `${naSchrap.n}`);
+  const gaten = await one(
+    `select count(*)::int as n from requirements r
+     where r.diploma_id = '${kopie}' and r.parent_id is null and r.kind = 'praktijk'
+       and r."position" > (select count(*) from requirements q
+                           where q.diploma_id = '${kopie}' and q.parent_id is null and q.kind = 'praktijk')`,
+  );
+  check('de nummering sluit weer aan', gaten.n === 0, `${gaten.n} gaten`);
+
+  // De landelijke lijst zelf is van niemand.
+  const landelijkRPC = await refused(kamp, `select update_own_list($1, 'Gekaapt')`, [roeien12]);
+  check('een landelijke lijst kun je niet hernoemen', landelijkRPC !== null, 'het lukte wel');
+  const landelijkDirect = await refused(
+    kamp,
+    `update diplomas set name = 'Gekaapt' where id = $1`,
+    [roeien12],
+  );
+  const naam = await one(`select name from diplomas where id = '${roeien12}'`);
+  check('ook niet rechtstreeks', landelijkDirect !== null || naam.name !== 'Gekaapt', naam.name);
+  const landelijkeEis = await refused(
+    kamp,
+    `update requirements set title = 'Gekaapt' where id = $1`,
+    [eis3],
+  );
+  const eisNaam = await one(`select title from requirements where id = '${eis3}'`);
+  check('en een landelijke eis ook niet', landelijkeEis !== null || eisNaam.title !== 'Gekaapt',
+    eisNaam.title);
+
+  // Een andere groep kan er niet bij, ook niet als beheerder daar.
+  const vreemdeHand = await refused(ander, `select update_own_list($1, 'Van mij nu')`, [insigne]);
+  check('een beheerder van een andere groep kan er niet bij', vreemdeHand !== null, 'het lukte wel');
+
+  // Eisen toevoegen, met onderdelen eronder, en niet dieper dan dat.
+  const eigenEis = (
+    await as(kamp, () =>
+      db.query(`select add_own_requirement($1, 'praktijk', 'Roer houden', 'Op een rechte koers') as id`, [
+        insigne,
+      ]),
+    )
+  ).rows[0].id;
+  const eigenOnderdeel = (
+    await as(kamp, () =>
+      db.query(`select add_own_requirement($1, 'praktijk', 'Stuurboord', null, $2) as id`, [
+        insigne,
+        eigenEis,
+      ]),
+    )
+  ).rows[0].id;
+  check('een eis met een onderdeel eronder', !!eigenOnderdeel, String(eigenOnderdeel));
+  const teDiep = await refused(
+    kamp,
+    `select add_own_requirement($1, 'praktijk', 'Nog dieper', null, $2)`,
+    [insigne, eigenOnderdeel],
+  );
+  check('een onderdeel van een onderdeel kan niet', teDiep !== null, 'het lukte wel');
+
+  // Volgorde omdraaien.
+  const tweede = (
+    await as(kamp, () =>
+      db.query(`select add_own_requirement($1, 'praktijk', 'Afmeren') as id`, [insigne]),
+    )
+  ).rows[0].id;
+  const omgedraaid = await refused(
+    kamp,
+    `select set_own_requirement_order($1, 'praktijk', null, $2::uuid[])`,
+    [insigne, [tweede, eigenEis]],
+  );
+  check('de volgorde aanpassen', omgedraaid === null, omgedraaid ?? '');
+  const eerste = await one(
+    `select title from requirements where diploma_id = '${insigne}' and parent_id is null
+       and kind = 'praktijk' and "position" = 1`,
+  );
+  check('en Afmeren staat nu bovenaan', eerste.title === 'Afmeren', eerste.title);
+
+  // Aftekenen op een eigen lijst werkt als op elke andere.
+  const kampInschrijving = (
+    await as(kamp, () =>
+      db.query(
+        `insert into enrollments (group_id, profile_id, diploma_id) values ($1, $2, $3) returning id`,
+        [jwf, nina, insigne],
+      ),
+    )
+  ).rows[0].id;
+  const afgetekend = await refused(
+    kamp,
+    `select set_sign_off_status($1, $2, 'gehaald', null)`,
+    [kampInschrijving, eigenEis],
+  );
+  check('aftekenen op een eigen lijst', afgetekend === null, afgetekend ?? '');
+  const voortgang = await as(kamp, () =>
+    one(`select done, total from enrollment_progress where enrollment_id = '${kampInschrijving}'`),
+  );
+  check('en het telt mee in de voortgang', Number(voortgang.done) === 1 && Number(voortgang.total) === 2,
+    `${voortgang.done} van ${voortgang.total}`);
+
+  // Weggooien kan pas als er niemand meer aan werkt.
+  const bezet = await refused(kamp, `select delete_own_list($1)`, [insigne]);
+  check('een lijst met een opleiding eraan gaat niet weg', bezet !== null, 'het lukte wel');
+  await db.exec(`delete from enrollments where id = '${kampInschrijving}'`);
+  const weggegooid = await refused(kamp, `select delete_own_list($1)`, [insigne]);
+  check('daarna wel', weggegooid === null, weggegooid ?? '');
+  const eisenWeg = await one(
+    `select count(*)::int as n from requirements where diploma_id = '${insigne}'`,
+  );
+  check('en zijn eisen gaan mee', eisenWeg.n === 0, `${eisenWeg.n}`);
 
   report();
   process.exit(failures === 0 ? 0 : 1);
