@@ -15,6 +15,7 @@ gewijzigd worden.
 | Zeilen (kielboot) | Kielboot I t/m IV | Handboek Opleidingen deel 3.1 Kielboot (2015) |
 | Buitenboordmotor | Buitenboordmotor I/II, III | Handboek Opleidingen deel 3.3 (2015) |
 | Sloep en motorvlet | Bemanningslid, Dagschipper, Schipper, All Round Schipper | Handboek Sloep- en motorvletvaren (concept 25-2-2020) |
+| Insignes | Bemanningslid niveau 1, 2 en 3 | Insigne Bemanningslid, Scouting Nederland |
 
 Samen 12 diploma's en ruim 250 eisen, elk met het nummer dat hij in het handboek
 heeft, zodat de lijst op het scherm en het boekje in je hand gelijk oplopen.
@@ -152,3 +153,27 @@ Tussen 013 en 018 kon die vanaf de beheerpagina bewerkt worden, en dat was te
 ruim: de wijziging gold voor élke groep in de database, en dit bestand
 overschreef hem bij de volgende run toch. Correcties op de landelijke eisen
 horen dus hier, in `010-eisen.sql`.
+
+## Het insigne Bemanningslid
+
+Sinds 27 september 2026 staat het insigne Bemanningslid van Scouting Nederland
+(activiteitengebied Uitdagende Scoutingtechnieken) in dezelfde catalogus. Het is
+landelijk vastgesteld, dus het hoort in `010-eisen.sql` en niet in een eigen
+lijst van één groep. In de app staat het onder het kopje **Insignes**
+(`diplomas.kind = 'insigne'`).
+
+Het boekje zet de eisen in een tabel: drie kolommen (niveau 1, 2 en 3) en vijf
+thema's onder elkaar — De basis, Kennis van je schip, Vaardigheden, Veiligheid,
+Spic en span. Elk niveau is hier één lijst, en het thema staat vooraan in de
+titel: "Vaardigheden: ankeren". Zo zie je op een steiger waar een eis bij hoort,
+zonder een veld dat de rest van de app niet kent.
+
+**Twee dingen zijn een keuze van ons, niet van het boekje:**
+
+- **Praktijk of theorie.** Het insigne kent dat onderscheid niet. Wat je laat
+  zien of doet staat onder Praktijk, wat je uitlegt, benoemt of kent onder
+  Theorie. Het aantal eisen klopt met het boekje; alleen de verdeling is van ons.
+- **De opsommingen als onderdelen.** De vijftien onderdelen van een vlet, de
+  vijftien vaartermen, de vijf knopen, de stappen na een omslag en de
+  communicatiemiddelen staan als losse onderdelen onder hun eis, net als de
+  knopen bij Roeien. Ze tellen niet mee in de voortgang.

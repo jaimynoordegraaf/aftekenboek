@@ -256,9 +256,17 @@ export default function DiplomaDetail() {
 
         <View style={{ gap: space.xs }}>
           {!diploma.group_id ? (
-            <Txt variant="small" dim>
-              Een theorie-examen blijft {diploma.theory_valid_months} maanden geldig.
-            </Txt>
+            // Een geldigheidsduur hoort bij een theorie-examen van de CWO; een
+            // insigne kent dat niet, dus daar zegt die regel niets.
+            diploma.kind === 'diploma' ? (
+              <Txt variant="small" dim>
+                Een theorie-examen blijft {diploma.theory_valid_months} maanden geldig.
+              </Txt>
+            ) : (
+              <Txt variant="small" dim>
+                Landelijk insigne van Scouting Nederland.
+              </Txt>
+            )
           ) : (
             <Txt variant="small" dim>
               Eigen lijst van onze groep. Andere groepen zien hem niet.

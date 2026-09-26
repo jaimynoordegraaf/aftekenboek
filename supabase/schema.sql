@@ -2983,3 +2983,229 @@ on conflict (code) do update set
   position   = excluded.position,
   title      = excluded.title;
 
+-- ---------------------------------------------------------------- insignes
+--
+-- Het insigne Bemanningslid van Scouting Nederland, uit het activiteitengebied
+-- Uitdagende Scoutingtechnieken. Landelijk vastgesteld, net als de CWO-eisen,
+-- dus het hoort hier en niet in een eigen lijst van één groep.
+--
+-- Het PDF zet de eisen in een tabel van drie kolommen — niveau 1, 2 en 3 — met
+-- vijf thema's onder elkaar: De basis, Kennis van je schip, Vaardigheden,
+-- Veiligheid, Spic en span. Elk niveau is hier één lijst, en het thema staat
+-- vooraan in de titel, zodat je op het scherm ziet waar een eis bij hoort.
+--
+-- Praktijk of theorie is een keuze van ons, niet van het boekje: dat kent het
+-- onderscheid niet. Wat je laat zien of doet is praktijk; wat je uitlegt,
+-- benoemt of kent is theorie.
+--
+-- Bron: Insigne Bemanningslid, Scouting Nederland (definitieve versie).
+
+insert into disciplines (code, name, subtitle, sort_order) values
+  ('insigne', $$Insignes$$, $$Uitdagende Scoutingtechnieken$$, 5)
+on conflict (code) do update set
+  name       = excluded.name,
+  subtitle   = excluded.subtitle,
+  sort_order = excluded.sort_order;
+
+insert into diplomas (discipline_id, code, kind, name, level_label, summary, sort_order, source)
+select d.id, v.code, 'insigne'::list_kind, v.name, v.level_label, v.summary, v.sort_order, v.source
+from (values
+  ('insigne', 'bml-1', $$Bemanningslid niveau 1$$, $$Niveau 1$$,
+   $$Kennismaken met varen op een lelievlet: de onderdelen en termen van het schip, de eerste knopen, veilig aan boord bewegen en meehelpen aan boord.$$,
+   1, $$Insigne Bemanningslid, Scouting Nederland — niveau 1$$),
+
+  ('insigne', 'bml-2', $$Bemanningslid niveau 2$$, $$Niveau 2$$,
+   $$Verder op de lelievlet: aanleggen, ankeren en slepen, weten wat te doen als de vlet omslaat, en een basis in roeien en zeilen die je met een watersportdiploma of insigne aantoont.$$,
+   2, $$Insigne Bemanningslid, Scouting Nederland — niveau 2$$),
+
+  ('insigne', 'bml-3', $$Bemanningslid niveau 3$$, $$Niveau 3$$,
+   $$Bemanningslid op een sleper, motorschip of wachtschip: het schip vaarklaar maken, schutten, slepen, communicatiemiddelen en onderhoud aan schip en motor. Sluit aan op het watersportdiploma sloep- en motorvletvaren.$$,
+   3, $$Insigne Bemanningslid, Scouting Nederland — niveau 3$$)
+) as v(discipline, code, name, level_label, summary, sort_order, source)
+join disciplines d on d.code = v.discipline
+on conflict (code) do update set
+  discipline_id = excluded.discipline_id,
+  kind          = excluded.kind,
+  name          = excluded.name,
+  level_label   = excluded.level_label,
+  summary       = excluded.summary,
+  sort_order    = excluded.sort_order,
+  source        = excluded.source;
+
+insert into requirements (diploma_id, code, kind, position, title, detail)
+select dp.id, v.code, v.kind::requirement_kind, v.position, v.title, v.detail
+from (values
+
+-- ---------------- Bemanningslid niveau 1 — praktijk
+('bml-1', 'bml-1.p1', 'praktijk', 1, $$De basis: zwemmen$$,
+ $$Toon aan dat je kunt zwemmen, bijvoorbeeld door je zwemdiploma A te laten zien.$$),
+('bml-1', 'bml-1.p2', 'praktijk', 2, $$De basis: een rechte koers varen$$,
+ $$Je weet hoe het roer werkt. Vaar een rechte koers op een vast punt. Je hoeft hierbij niet de zeilen of het zwaard te bedienen.$$),
+('bml-1', 'bml-1.p3', 'praktijk', 3, $$Vaardigheden: lijnen opbergen$$,
+ $$Laat zien hoe je de lijnen netjes opbergt.$$),
+('bml-1', 'bml-1.p4', 'praktijk', 4, $$Veiligheid: bukken bij een gijp$$,
+ $$Oefen het op tijd bukken bij een gecontroleerde gijp.$$),
+('bml-1', 'bml-1.p5', 'praktijk', 5, $$Veiligheid: veilig aan boord bewegen$$,
+ $$Sta en loop niet in de boot en houd je handen binnenboord tijdens het varen.$$),
+('bml-1', 'bml-1.p6', 'praktijk', 6, $$Spic en span: bagage opbergen$$,
+ $$Laat zien hoe je bagage aan boord netjes en watervast opbergt.$$),
+('bml-1', 'bml-1.p7', 'praktijk', 7, $$Spic en span: aanleggen op een kikker$$,
+ $$Leg een boot aan en leg een landvast aan een kikker.$$),
+('bml-1', 'bml-1.p8', 'praktijk', 8, $$Spic en span: een sleeplijn aanpakken$$,
+ $$Pak een sleeplijn aan op een klein zeilbootje, zoals een optimist, en maak deze goed vast.$$),
+
+-- ---------------- Bemanningslid niveau 1 — theorie
+('bml-1', 'bml-1.t1', 'theorie', 1, $$Kennis van je schip: vijftien onderdelen van een vlet$$,
+ $$Herken de vijftien belangrijkste onderdelen van een vlet.$$),
+('bml-1', 'bml-1.t2', 'theorie', 2, $$Kennis van je schip: vijftien vaartermen$$,
+ $$Leg uit wat deze vijftien belangrijke vaartermen betekenen.$$),
+('bml-1', 'bml-1.t3', 'theorie', 3, $$Vaardigheden: knopen en hun toepassing$$,
+ $$Leg uit wanneer je deze knopen toepast.$$),
+('bml-1', 'bml-1.t4', 'theorie', 4, $$Veiligheid: kleding en schoeisel$$,
+ $$Leg uit wat goede kleding en goed schoeisel is aan boord van een lelievlet.$$),
+('bml-1', 'bml-1.t5', 'theorie', 5, $$Veiligheid: het reddingsvest$$,
+ $$Vertel wat de regels zijn voor het dragen van een reddingsvest, zoals die in de Nautisch Technische Richtlijnen (NTR) staan.$$),
+('bml-1', 'bml-1.t6', 'theorie', 6, $$Veiligheid: goed zeemanschap$$,
+ $$Benoem de vaarregel voor goed zeemanschap.$$),
+('bml-1', 'bml-1.t7', 'theorie', 7, $$Veiligheid: omgaan met de natuur$$,
+ $$Benoem hoe je op een goede manier met de natuur — planten, dieren en afval — op en rond het water omgaat.$$),
+
+-- ---------------- Bemanningslid niveau 2 — praktijk
+('bml-2', 'bml-2.p1', 'praktijk', 1, $$De basis: roeien en zeilen aantonen$$,
+ $$Voldoe aan één eis uit elke groep. Groep 1, roeien: het insigne Varen op Spierkracht niveau 1 (variant roeien), of het watersportdiploma Roeien (CWO Roeien I/II). Groep 2, zeilen: het watersportdiploma Jeugdzeilen (CWO Jeugdzeilen), of het watersportdiploma Kielboot (CWO Kielboot I).$$),
+('bml-2', 'bml-2.p2', 'praktijk', 2, $$Vaardigheden: aanleggen met landvasten$$,
+ $$Laat zien hoe je het schip aanlegt en op welke manier je de landvasten gebruikt. Voer dit uit bij het aanleggen aan een vaste wal, een steiger of een brug.$$),
+('bml-2', 'bml-2.p3', 'praktijk', 3, $$Vaardigheden: ankeren$$,
+ $$Leg het anker goed klaar, werp het correct uit, controleer of het goed ligt en maak het weer los.$$),
+('bml-2', 'bml-2.p4', 'praktijk', 4, $$Vaardigheden: veilig slepen$$,
+ $$Hanteer de basisveiligheidsregels tijdens het slepen, volgens de NTR en de regels van je groep.$$),
+('bml-2', 'bml-2.p5', 'praktijk', 5, $$Vaardigheden: een sleeplijn aanpakken$$,
+ $$Pak een sleeplijn aan en leg hem vast.$$),
+('bml-2', 'bml-2.p6', 'praktijk', 6, $$Vaardigheden: het zwaard tijdens het slepen$$,
+ $$Toon aan hoe je het zwaard van een lelievlet gebruikt tijdens het slepen.$$),
+('bml-2', 'bml-2.p7', 'praktijk', 7, $$Vaardigheden: afremmen met een puts$$,
+ $$Laat zien hoe je een puts of emmer gebruikt om af te remmen tijdens het slepen.$$),
+('bml-2', 'bml-2.p8', 'praktijk', 8, $$Spic en span: zeilen uithangen$$,
+ $$Laat zien hoe je zeilen uithangt na het varen, als ze nat zijn geworden.$$),
+('bml-2', 'bml-2.p9', 'praktijk', 9, $$Spic en span: lijnen uitspoelen$$,
+ $$Laat zien hoe je lijnen uitspoelt, nadat er bijvoorbeeld zand in is gekomen.$$),
+('bml-2', 'bml-2.p10', 'praktijk', 10, $$Spic en span: groot onderhoud van de vlet$$,
+ $$Voer minimaal twee onderhoudstaken uit tijdens het groot onderhoud van de lelievlet, zoals schuren of schilderen. Zorg dat je je afval netjes opruimt en scheidt.$$),
+
+-- ---------------- Bemanningslid niveau 2 — theorie
+('bml-2', 'bml-2.t1', 'theorie', 1, $$De basis: Beaufort en de zeilkoersen$$,
+ $$Je kent de schaal van Beaufort (windkracht) en de zeilkoersen van een lelievlet.$$),
+('bml-2', 'bml-2.t2', 'theorie', 2, $$Kennis van je schip: zwemvest, reddingsvest en self-inflatable$$,
+ $$Leg uit wat de verschillen zijn tussen zwemvesten, reddingsvesten en self-inflatables.$$),
+('bml-2', 'bml-2.t3', 'theorie', 3, $$Kennis van je schip: vanuit de kuip werken$$,
+ $$Leg uit hoe je veilig vanuit de kuip kunt werken.$$),
+('bml-2', 'bml-2.t4', 'theorie', 4, $$Kennis van je schip: waar je wel en niet zwemt$$,
+ $$Vertel waar je, in jouw vaaromgeving, wel en niet veilig kunt of mag zwemmen.$$),
+('bml-2', 'bml-2.t5', 'theorie', 5, $$Kennis van je schip: zwanen en ganzen$$,
+ $$Leg uit wat de risico's zijn als je op het water zwanen of ganzen tegenkomt.$$),
+('bml-2', 'bml-2.t6', 'theorie', 6, $$Veiligheid: de vlet is omgeslagen$$,
+ $$Leg uit wat je moet doen als de lelievlet omgeslagen is.$$),
+
+-- ---------------- Bemanningslid niveau 3 — praktijk
+('bml-3', 'bml-3.p1', 'praktijk', 1, $$De basis: het schip klaarmaken om uit te varen$$,
+ $$Help het schip klaar te maken om uit te varen: zorg dat alle materialen compleet zijn, controleer de motor en maak hem klaar, en controleer dat alle vereiste veiligheidsmiddelen aan boord zijn. Met schip wordt op dit niveau een sleper, motorschip of wachtschip bedoeld.$$),
+('bml-3', 'bml-3.p2', 'praktijk', 2, $$De basis: dagelijks onderhoud aan de motor$$,
+ $$Laat zien hoe je klein of dagelijks onderhoud aan de motor van het schip uitvoert.$$),
+('bml-3', 'bml-3.p3', 'praktijk', 3, $$Kennis van je schip: een veiligheidsplattegrond$$,
+ $$Maak een veiligheidsplattegrond van het schip.$$),
+('bml-3', 'bml-3.p4', 'praktijk', 4, $$Vaardigheden: schutten in een sluis$$,
+ $$Leg een schip vast in een sluis en laat daarbij zien wat je met de lijnen moet doen.$$),
+('bml-3', 'bml-3.p5', 'praktijk', 5, $$Vaardigheden: een bolder beleggen$$,
+ $$Beleg stilstaand een bolder.$$),
+('bml-3', 'bml-3.p6', 'praktijk', 6, $$Vaardigheden: ankeren$$,
+ $$Leg het anker goed klaar, werp het correct uit, controleer of het goed ligt en maak het weer los.$$),
+('bml-3', 'bml-3.p7', 'praktijk', 7, $$Vaardigheden: sleepopstellingen$$,
+ $$Noem twee soorten sleepopstellingen en coördineer ze.$$),
+('bml-3', 'bml-3.p8', 'praktijk', 8, $$Spic en span: groot onderhoud aan het schip$$,
+ $$Voer minimaal twee onderhoudstaken uit tijdens het groot onderhoud van het schip. Weet welke onderhoudsmiddelen duurzamer zijn en kies, binnen de mogelijkheden van je groep, voor de duurzaamste optie.$$),
+('bml-3', 'bml-3.p9', 'praktijk', 9, $$Spic en span: onderhoud aan de motor$$,
+ $$Assisteer bij groot onderhoud aan de motor.$$),
+
+-- ---------------- Bemanningslid niveau 3 — theorie
+('bml-3', 'bml-3.t1', 'theorie', 1, $$Kennis van je schip: de veiligheidsmiddelen$$,
+ $$Vertel waar alle veiligheidsmiddelen aan boord te vinden zijn en hoe je ze kunt gebruiken.$$),
+('bml-3', 'bml-3.t2', 'theorie', 2, $$Vaardigheden: typen sleeplijnen$$,
+ $$Noem twee typen sleeplijnen.$$),
+('bml-3', 'bml-3.t3', 'theorie', 3, $$Veiligheid: communicatiemiddelen op het water$$,
+ $$Weet hoe je communicatiemiddelen op het water correct gebruikt. PMR- en LPD-portofoons en mobiele telefoons lopen over open netwerken: storing is mogelijk en de hulpdiensten luisteren niet mee. Voor een marifoon moet je gecertificeerd zijn.$$)
+
+) as v(diploma, code, kind, position, title, detail)
+join diplomas dp on dp.code = v.diploma
+on conflict (code) do update set
+  diploma_id = excluded.diploma_id,
+  kind       = excluded.kind,
+  position   = excluded.position,
+  title      = excluded.title,
+  detail     = excluded.detail;
+
+-- De opsommingen achter een eis, als losse onderdelen.
+insert into requirements (diploma_id, parent_id, code, kind, position, title)
+select p.diploma_id, p.id, p.code || '.' || v.position, p.kind, v.position, v.title
+from (values
+
+-- ---- De vijftien onderdelen van een vlet
+('bml-1.t1',  1, $$Voordek$$),
+('bml-1.t1',  2, $$Achterdek$$),
+('bml-1.t1',  3, $$Roer$$),
+('bml-1.t1',  4, $$Doft$$),
+('bml-1.t1',  5, $$Vlonder of buikdenning$$),
+('bml-1.t1',  6, $$Zijstag$$),
+('bml-1.t1',  7, $$Voorstag$$),
+('bml-1.t1',  8, $$Mast$$),
+('bml-1.t1',  9, $$Fok$$),
+('bml-1.t1', 10, $$Grootzeil$$),
+('bml-1.t1', 11, $$Anker$$),
+('bml-1.t1', 12, $$Dol$$),
+('bml-1.t1', 13, $$Riem$$),
+('bml-1.t1', 14, $$Wrikriem$$),
+('bml-1.t1', 15, $$Hoosblik$$),
+
+-- ---- De vijftien vaartermen
+('bml-1.t2',  1, $$Bakboord$$),
+('bml-1.t2',  2, $$Stuurboord$$),
+('bml-1.t2',  3, $$Overstag$$),
+('bml-1.t2',  4, $$Gijp$$),
+('bml-1.t2',  5, $$Hogerwal$$),
+('bml-1.t2',  6, $$Lagerwal$$),
+('bml-1.t2',  7, $$Roeien$$),
+('bml-1.t2',  8, $$Zeilen$$),
+('bml-1.t2',  9, $$Wrikken$$),
+('bml-1.t2', 10, $$Oploeven$$),
+('bml-1.t2', 11, $$Afvallen$$),
+('bml-1.t2', 12, $$Noord$$),
+('bml-1.t2', 13, $$Oost$$),
+('bml-1.t2', 14, $$Zuid$$),
+('bml-1.t2', 15, $$West$$),
+
+-- ---- De knopen van niveau 1
+('bml-1.t3',  1, $$Achtknoop$$),
+('bml-1.t3',  2, $$Mastworp$$),
+('bml-1.t3',  3, $$Paalsteek$$),
+('bml-1.t3',  4, $$Kikker beleggen$$),
+('bml-1.t3',  5, $$Halve steek$$),
+
+-- ---- Als de vlet omslaat
+('bml-2.t6',  1, $$Veiligheidsmaatregelen van en voor de bemanningsleden$$),
+('bml-2.t6',  2, $$Het materiaal veiligstellen$$),
+('bml-2.t6',  3, $$De hulpdiensten alarmeren$$),
+
+-- ---- Communicatiemiddelen
+('bml-3.t3',  1, $$PMR- of LPD-portofoon$$),
+('bml-3.t3',  2, $$Mobiele telefoon$$),
+('bml-3.t3',  3, $$Basiskennis marifoon$$),
+('bml-3.t3',  4, $$SOS- en noodsignalen$$)
+
+) as v(parent, position, title)
+join requirements p on p.code = v.parent
+on conflict (code) do update set
+  diploma_id = excluded.diploma_id,
+  parent_id  = excluded.parent_id,
+  kind       = excluded.kind,
+  position   = excluded.position,
+  title      = excluded.title;
+

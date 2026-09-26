@@ -143,13 +143,40 @@ async function main() {
   section('De catalogus is geladen');
 
   const disciplines = await one('select count(*)::int as n from disciplines');
-  check('vier disciplines', disciplines.n === 4, `${disciplines.n}`);
+  check('vijf disciplines', disciplines.n === 5, `${disciplines.n}`);
 
   const diplomas = await one('select count(*)::int as n from diplomas');
-  check('twaalf diploma\'s', diplomas.n === 12, `${diplomas.n}`);
+  check('twaalf diploma\'s en drie insignes', diplomas.n === 15, `${diplomas.n}`);
 
   const reqs = await one('select count(*)::int as n from requirements');
   check('meer dan 250 eisen', reqs.n > 250, `${reqs.n}`);
+
+  // Het insigne Bemanningslid is landelijk, net als de CWO-eisen: drie niveaus,
+  // van niemand, en met kind 'insigne' zodat het niet tussen de diploma's staat.
+  const insignes = await one(
+    `select count(*)::int as n, count(*) filter (where group_id is null)::int as landelijk
+     from diplomas where kind = 'insigne'`,
+  );
+  check('drie insignes', insignes.n === 3, `${insignes.n}`);
+  check('en ze zijn landelijk', insignes.landelijk === 3, `${insignes.landelijk}`);
+
+  const bml = await one(`
+    select
+      count(*) filter (where r.parent_id is null)::int     as eisen,
+      count(*) filter (where r.parent_id is not null)::int as onderdelen
+    from requirements r
+    join diplomas d on d.id = r.diploma_id
+    where d.code like 'bml-%'
+  `);
+  check('het insigne heeft 43 eisen', bml.eisen === 43, `${bml.eisen}`);
+  check('en 42 onderdelen eronder', bml.onderdelen === 42, `${bml.onderdelen}`);
+
+  const vletdelen = await one(`
+    select count(*)::int as n from requirements r
+    join requirements p on p.id = r.parent_id
+    where p.code = 'bml-1.t1'
+  `);
+  check('de vijftien onderdelen van een vlet staan erin', vletdelen.n === 15, `${vletdelen.n}`);
 
   // parent_id is null: onderdelen tellen niet mee als eis — dat is de hele
   // afspraak achter 012-onderdelen.sql.
@@ -242,9 +269,9 @@ async function main() {
   const before = await one(`select id from requirements where code = 'roeien-12.p1'`);
   await db.exec(readFileSync(join(sqlDir, '010-eisen.sql'), 'utf8'));
   const after = await one(`select id from requirements where code = 'roeien-12.p1'`);
-  const stillTwelve = await one('select count(*)::int as n from diplomas');
+  const stillFifteen = await one('select count(*)::int as n from diplomas');
   check('opnieuw draaien houdt dezelfde eis-id', before.id === after.id);
-  check('opnieuw draaien dupliceert geen diploma', stillTwelve.n === 12, `${stillTwelve.n}`);
+  check('opnieuw draaien dupliceert geen diploma', stillFifteen.n === 15, `${stillFifteen.n}`);
 
   section('Twee groepen, vier mensen');
 
@@ -615,7 +642,7 @@ async function main() {
      select id, 'gekaapt', 'Gekaapt' from disciplines limit 1`,
   );
   const landelijkAantal = await one('select count(*)::int as n from diplomas where group_id is null');
-  check('en er komt geen landelijk diploma bij', landelijkAantal.n === 12, `${landelijkAantal.n}`);
+  check('en er komt geen landelijk diploma bij', landelijkAantal.n === 15, `${landelijkAantal.n}`);
 
   await refused(
     sam,
@@ -623,7 +650,7 @@ async function main() {
      select id, 'verzonnen', 'Verzonnen' from disciplines limit 1`,
   );
   const diplomaCount = await one('select count(*)::int as n from diplomas');
-  check('en een lid kan er geen diploma bij zetten', diplomaCount.n === 12,
+  check('en een lid kan er geen diploma bij zetten', diplomaCount.n === 15,
     `${diplomaCount.n}`);
 
   section('Leden zonder account');
