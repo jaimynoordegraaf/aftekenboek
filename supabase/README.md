@@ -16,8 +16,13 @@ Voor een nieuw project is `schema.sql` alles in één keer. Kopieer hem vanuit d
 projectmap naar het klembord:
 
 ```bash
-Get-Content supabase/schema.sql | Set-Clipboard
+Get-Content supabase/schema.sql -Encoding UTF8 | Set-Clipboard
 ```
+
+Let op `-Encoding UTF8`. Zonder dat leest PowerShell 5.1 een bestand zonder BOM
+als ANSI: `é` wordt dan `Ã©` en `—` wordt `â€”`. Dat plak je zo de database in,
+en je ziet het pas terug in de app. Repareren gaat door `010-eisen.sql` opnieuw
+te draaien, mét die vlag — hij werkt bij op `code`, dus aftekeningen blijven staan.
 
 Dan **SQL Editor → New query**, plakken, **Run**. Hij hoort te eindigen met
 "Success. No rows returned".
