@@ -15,3 +15,4 @@ node_modules/
 expo-env.d.ts
 # @end expo-cli
 dist-admin/
+docs/handleiding-print.html
