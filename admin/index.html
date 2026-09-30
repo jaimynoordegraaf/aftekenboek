@@ -529,10 +529,37 @@ async function start() {
 
 // ---------------------------------------------------------------- schermen
 
+// Welke uitklappers openstonden, en waar je stond. Na elke opslag tekent het
+// scherm zichzelf opnieuw — anders zie je een nieuwe vraag niet verschijnen —
+// en zonder dit klapte alles dicht en sprong je naar de bovenkant terug.
+const geopend = new Set();
+let scrolStand = 0;
+
+/**
+ * Een uitklapper die onthoudt of hij openstond.
+ *
+ * De sleutel moet hetzelfde blijven tussen twee keer tekenen; een id uit de
+ * database dus, geen volgnummer.
+ */
+function klapper(sleutel, kopregel) {
+  const details = el('details', {});
+  details.dataset.sleutel = sleutel;
+  details.append(el('summary', {}, kopregel));
+  if (geopend.has(sleutel)) details.open = true;
+  details.addEventListener('toggle', () => {
+    if (details.open) geopend.add(sleutel);
+    else geopend.delete(sleutel);
+  });
+  return details;
+}
+
 function render() {
   if (typeof stopMeekijken === 'function') stopMeekijken();
   const view = document.getElementById('view');
+  scrolStand = window.scrollY;
   view.innerHTML = '';
+  // De schermen vullen zich asynchroon, dus de scrolstand komt even later terug.
+  setTimeout(() => window.scrollTo({ top: scrolStand }), 120);
   if (tab === 'leden') renderLeden(view);
   else if (tab === 'codes') renderCodes(view);
   else if (tab === 'speltakken') renderSpeltakken(view);
@@ -962,8 +989,8 @@ async function renderCatalogus(view) {
 
 /** Een landelijke lijst: lezen, en desgewenst kopiëren. */
 function landelijkBlock(dip) {
-  const details = el('details', {});
-  details.append(el('summary', {}, `${dip.name}${dip.level_label ? ` (${dip.level_label})` : ''}`));
+  const details = klapper(`diploma:${dip.id}`,
+    `${dip.name}${dip.level_label ? ` (${dip.level_label})` : ''}`);
   const body = el('div', { style: 'margin-top:12px' }, el('p', { class: 'dim' }, 'Bezig met laden…'));
   details.append(body);
 
@@ -1006,9 +1033,8 @@ function landelijkBlock(dip) {
 
 /** Een eigen lijst: alles mag. */
 function eigenLijstBlock(dip) {
-  const details = el('details', {});
-  details.append(el('summary', {},
-    `${dip.name}${dip.kind === 'insigne' ? ' — insigne' : ''}`));
+  const details = klapper(`diploma:${dip.id}`,
+    `${dip.name}${dip.kind === 'insigne' ? ' — insigne' : ''}`);
   const body = el('div', { style: 'margin-top:12px' }, el('p', { class: 'dim' }, 'Bezig met laden…'));
   details.append(body);
 
@@ -1358,8 +1384,7 @@ async function lezenIn(data, meld) {
 }
 
 function examenBlock(ex, diplomas) {
-  const details = el('details', {});
-  details.append(el('summary', {}, ex.title));
+  const details = klapper(`examen:${ex.id}`, ex.title);
   const body = el('div', { style: 'margin-top:12px' }, el('p', { class: 'dim' }, 'Bezig met laden…'));
   details.append(body);
 
@@ -1702,11 +1727,13 @@ function vraagBlock(vraag, opties, buren, eis) {
       : null));
   wrap.append(plaatje);
 
-  const juist = opties.some((o) => o.correct);
-  if (!juist) {
-    wrap.append(el('p', { class: 'note' },
-      'Bij deze vraag staat nog geen goed antwoord aangevinkt. Zolang dat zo is, rekent hij hem altijd fout.'));
-  }
+  const waarschuwing = el('p', { class: 'note' },
+    'Bij deze vraag staat nog geen goed antwoord aangevinkt. Zolang dat zo is, rekent hij hem altijd fout.');
+  const toonWaarschuwing = () => {
+    waarschuwing.classList.toggle('hidden', opties.some((o) => o.correct));
+  };
+  toonWaarschuwing();
+  wrap.append(waarschuwing);
 
   // Eén tik markeert het goede antwoord, en de tekst bewaart zichzelf zodra je
   // uit het veld klikt. Aanvinken plus apart opslaan was twee handelingen te
@@ -1723,11 +1750,20 @@ function vraagBlock(vraag, opties, buren, eis) {
 
     wrap.append(el('div', { class: 'part' },
       el('span', { class: 'dim' }, `${optie.position}.`), label,
-      chip(optie.correct ? 'goed' : 'fout', optie.correct, async () => {
-        await run(async () => check(await db.from('exam_options')
-          .update({ correct: !optie.correct }).eq('id', optie.id)));
-        render();
-      }),
+      // Ter plekke bijwerken, niet het hele scherm opnieuw tekenen: bij twintig
+      // vragen onder elkaar spring je anders elke tik terug naar boven.
+      (() => {
+        const knopje = chip(optie.correct ? 'goed' : 'fout', optie.correct, async () => {
+          const nieuw = !optie.correct;
+          await run(async () => check(await db.from('exam_options')
+            .update({ correct: nieuw }).eq('id', optie.id)), nieuw ? 'Goed antwoord' : 'Niet meer goed');
+          optie.correct = nieuw;
+          knopje.textContent = nieuw ? 'goed' : 'fout';
+          knopje.classList.toggle('on', nieuw);
+          toonWaarschuwing();
+        });
+        return knopje;
+      })(),
       el('button', {
         class: 'btn danger',
         onclick: async () => {
@@ -1873,9 +1909,8 @@ function sessiesBlock(ex) {
 
 function sessieBlock(sessie) {
   const open = sessie.status === 'open' && new Date(sessie.closes_at) > new Date();
-  const details = el('details', {});
-  details.append(el('summary', {},
-    `${sessie.code} — ${sessie.label ?? 'zonder naam'} — ${open ? 'open' : 'gesloten'}`));
+  const details = klapper(`sessie:${sessie.id}`,
+    `${sessie.code} — ${sessie.label ?? 'zonder naam'} — ${open ? 'open' : 'gesloten'}`);
 
   const body = el('div', { style: 'margin-top:12px' });
   details.append(body);
@@ -1907,6 +1942,11 @@ function sessieBlock(sessie) {
     const tabel = el('div', { style: 'margin-top:12px' });
     body.append(tabel);
 
+    // Alleen opnieuw tekenen als er iets veranderd is. Elke vier seconden de
+    // lijst weggooien en opnieuw opbouwen betekende: opengeklapte antwoorden
+    // dicht, en de pagina onder je vinger vandaan terwijl je aan het scrollen was.
+    let vorige = '';
+
     const verversen = async () => {
       let rijen;
       try {
@@ -1917,6 +1957,11 @@ function sessieBlock(sessie) {
         tabel.append(el('p', { class: 'note' }, e.message ?? String(e)));
         return;
       }
+
+      const nu = JSON.stringify(rijen);
+      if (nu === vorige) return;
+      vorige = nu;
+
       tabel.innerHTML = '';
       if (rijen.length === 0) {
         tabel.append(el('p', { class: 'dim' }, 'Nog niemand binnen.'));
