@@ -99,6 +99,13 @@ const HOOFDSTUKKEN = [
  * stuurteken gaat er dus af; wat ervoor staat is de echte zin.
  */
 function schoon(tekst) {
+  // De voet van de pagina en het antwoordenformulier lopen soms door in het
+  // laatste antwoord van een blok. Alles vanaf daar hoort er niet bij.
+  // "Examen" staat in de voet zelf ook nog eens afgebroken ("Exame n"), dus de
+  // spaties mogen overal tussen staan.
+  const voet = /\s*(E\s*x\s*a\s*m\s*e\s*n\s*Kb|Pagina\s*:\s*\d+|Antwoordenformulier)/
+    .exec(tekst ?? '');
+  if (voet) tekst = tekst.slice(0, voet.index);
   const stuur = /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.exec(tekst ?? '');
   const tot = stuur ? tekst.slice(0, stuur.index) : (tekst ?? '');
   return tot.replace(/\s+/g, ' ').trim();
@@ -222,14 +229,71 @@ for (const w of plat.toLowerCase().match(/[a-zà-ü]+/g) ?? []) {
 }
 const bestaat = (w) => (woordental.get(w) ?? 0) >= 2;
 
-function plakWoorden(tekst) {
-  return tekst.replace(/([a-zà-ü]{2,})\s([a-zà-ü]{1,4})\b/gi, (heel, a, b) => {
-    // Alleen plakken als het stuk vóór de spatie zelf geen woord is en het
-    // geheel dat wél is. "de boot" blijft dus "de boot".
-    if (!bestaat(a.toLowerCase()) && bestaat((a + b).toLowerCase())) return a + b;
-    return heel;
-  });
+// Hoe vaak twee woorden áchter elkaar staan. Dat is het tegenbewijs: "de boot"
+// komt overal voor, "we lke" nergens anders.
+const parental = new Map();
+const losseWoorden = plat.toLowerCase().match(/[a-zà-ü]+/g) ?? [];
+for (let i = 0; i + 1 < losseWoorden.length; i++) {
+  const paar = `${losseWoorden[i]} ${losseWoorden[i + 1]}`;
+  parental.set(paar, (parental.get(paar) ?? 0) + 1);
 }
+
+// Woord voor woord, niet met één grote zoekopdracht: die eet het vorige woord
+// op en kijkt dan niet meer naar het paar erachter. In "Naar we lke kant" werd
+// zo "Naar we" bekeken en "we lke" overgeslagen.
+/**
+ * Woorden die het uitpakken doormidden hakt en die in dit examen maar één keer
+ * voorkomen, dus zonder tegenbewijs. Met de hand nagelezen in de PDF.
+ */
+const HERSTEL = [
+  ['we lke', 'welke'],
+  ['bli jven', 'blijven'],
+  ['w aarom', 'waarom'],
+  ['ov er', 'over'],
+  ['D e ', 'De '],
+  ['aa nvaring', 'aanvaring'],
+  ['verbra nden', 'verbranden'],
+  ['vri j', 'vrij'],
+  ['nade rt', 'nadert'],
+  ['gaa t', 'gaat'],
+  ['a an ', 'aan '],
+];
+
+function plakWoorden(tekst) {
+  const delen = tekst.split(' ');
+  const uit = [];
+
+  for (let i = 0; i < delen.length; i++) {
+    const a = delen[i];
+    const b = delen[i + 1];
+    const leesbaar = (w) => /^[a-zà-ü]+$/i.test(w ?? '');
+    const bKaal = (b ?? '').replace(/[.,?;:!]+$/, '');
+
+    if (b && leesbaar(a) && leesbaar(bKaal)) {
+      const kort = a.toLowerCase();
+      const staart = bKaal.toLowerCase();
+      const samen = kort + staart;
+
+      // 1. Het stuk vóór de spatie is zelf geen woord, het geheel wel.
+      const losFragment = !bestaat(kort) && bestaat(samen);
+
+      // Verder niets. Slimmere regels — "dit paar staat nergens anders naast
+      // elkaar" — plakten ook goede woorden aan elkaar: "Hoe heet" werd
+      // "Hoeheet". Een fout woord is erger dan een fout dat blijft staan, want
+      // het eerste ziet niemand meer.
+      if (losFragment) {
+        uit.push(a + b);
+        i++;
+        continue;
+      }
+    }
+
+    uit.push(a);
+  }
+
+  return HERSTEL.reduce((t, [kapot, heel]) => t.split(kapot).join(heel), uit.join(' '));
+}
+
 
 for (const v of vragen) {
   v.vraag = plakWoorden(v.vraag);
