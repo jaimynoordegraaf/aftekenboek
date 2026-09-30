@@ -66,6 +66,14 @@
   }
   button.chip { border: 0; cursor: pointer; font-family: inherit; padding: 5px 12px; }
   button.chip.on { background: var(--accent); color: var(--on-accent); }
+  .keuzeregel {
+    display: flex; justify-content: space-between; gap: 12px; width: 100%;
+    text-align: left; font: inherit; cursor: pointer; padding: 10px 12px;
+    border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px;
+    background: var(--card); color: var(--text);
+  }
+  .keuzeregel.aan { border-color: var(--accent); background: var(--chip); font-weight: 600; }
+  .keuzeregel.uit { opacity: .55; cursor: default; }
   .note {
     border-left: 3px solid var(--warn); background: var(--card);
     padding: 12px 14px; border-radius: 0 10px 10px 0; margin-bottom: 16px; font-size: 13px;
@@ -1266,101 +1274,182 @@ function examenBlock(ex, diplomas) {
 /**
  * Vragen maken uit de eisenlijst.
  *
- * Een theorie-examen gaat over de eisen die toch al in de app staan, dus vink je
+ * Een theorie-examen gaat over de eisen die toch al in de app staan, dus klik je
  * ze hier aan in plaats van ze over te typen. De vraag houdt vast bij welke eis
  * hij hoort (021), zodat een uitslag later terug te vertalen is naar de
  * vorderingenstaat.
  *
- * Wat hier ontstaat is een kale vraag: de eistekst als vraag, en nog geen
- * antwoorden. Die zet je er daarna zelf onder — welke antwoordmogelijkheden
- * goed en fout zijn, weet alleen de instructeur.
+ * Alles is een knop: het diploma, de soort eisen, de eisen zelf en wat voor
+ * antwoorden eronder moeten. Wie een examen bouwt, tikt hooguit de losse
+ * antwoorden in die alleen hij kan verzinnen.
  */
 function uitEisen(ex, vragen, diplomas) {
-  const details = el('details', { style: 'margin-top:10px' });
-  details.append(el('summary', {}, 'Vragen uit de eisenlijst'));
+  const doos = el('div', { class: 'card', style: 'margin-top:12px' });
+  doos.append(el('h3', {}, 'Vragen uit de eisenlijst'));
 
-  const body = el('div', { style: 'margin-top:10px' });
-  details.append(body);
+  let diplomaId = ex.diploma_id ?? '';
+  let soort = 'theorie';
+  let vorm = 'juist_onjuist';
+  const gekozen = new Set();
 
-  const gekozenDiploma = el('select', {},
-    el('option', { value: '' }, 'Kies een diploma'),
-    ...diplomas.map((d) => el('option',
-      { value: d.id, selected: d.id === ex.diploma_id },
-      d.name + (d.kind === 'insigne' ? ' (insigne)' : ''))));
-
-  const soort = el('select', {},
-    el('option', { value: 'theorie' }, 'Theorie-eisen'),
-    el('option', { value: 'praktijk' }, 'Praktijkeisen'));
-
+  const diplomaRij = el('div', { class: 'row', style: 'flex-wrap:wrap; gap:6px' });
+  const soortRij = el('div', { class: 'row', style: 'flex-wrap:wrap; gap:6px; margin-top:8px' });
+  const vormRij = el('div', { class: 'row', style: 'flex-wrap:wrap; gap:6px; margin-top:8px' });
   const lijst = el('div', { style: 'margin-top:10px' });
-  body.append(el('div', { class: 'row' }, gekozenDiploma, soort));
-  body.append(lijst);
+  const voet = el('div', { class: 'row', style: 'margin-top:10px' });
+
+  doos.append(diplomaRij, soortRij, vormRij, lijst, voet);
 
   // Welke eisen al in dit examen zitten; die hoeven er niet nog een keer bij.
   const alGebruikt = new Set(vragen.map((q) => q.requirement_id).filter(Boolean));
 
+  const tekenKoppen = () => {
+    diplomaRij.innerHTML = '';
+    diplomaRij.append(el('span', { class: 'dim' }, 'Diploma'));
+    for (const d of diplomas) {
+      diplomaRij.append(chip(d.name, d.id === diplomaId, () => {
+        diplomaId = d.id;
+        gekozen.clear();
+        tekenKoppen();
+        laden();
+      }));
+    }
+
+    soortRij.innerHTML = '';
+    soortRij.append(el('span', { class: 'dim' }, 'Soort'));
+    for (const [waarde, naam] of [['theorie', 'Theorie'], ['praktijk', 'Praktijk']]) {
+      soortRij.append(chip(naam, soort === waarde, () => {
+        soort = waarde;
+        gekozen.clear();
+        tekenKoppen();
+        laden();
+      }));
+    }
+
+    vormRij.innerHTML = '';
+    vormRij.append(el('span', { class: 'dim' }, 'Antwoorden'));
+    for (const [waarde, naam] of [
+      ['juist_onjuist', 'Juist / onjuist'],
+      ['onderdelen', 'De onderdelen van de eis'],
+      ['leeg', 'Zelf invullen'],
+    ]) {
+      vormRij.append(chip(naam, vorm === waarde, () => { vorm = waarde; tekenKoppen(); }));
+    }
+  };
+
+  const tekenVoet = () => {
+    voet.innerHTML = '';
+    if (gekozen.size === 0) {
+      voet.append(el('span', { class: 'dim' }, 'Klik de eisen aan die je wilt gebruiken.'));
+      return;
+    }
+    voet.append(
+      el('button', {
+        class: 'btn',
+        onclick: () => toevoegen(),
+      }, `${gekozen.size} ${gekozen.size === 1 ? 'eis' : 'eisen'} toevoegen`),
+      el('button', { class: 'btn ghost', onclick: () => { gekozen.clear(); laden(); } }, 'Niets'),
+    );
+  };
+
+  let eisenNu = [];
+
   const laden = async () => {
     lijst.innerHTML = '';
-    if (!gekozenDiploma.value) return;
+    tekenVoet();
+    if (!diplomaId) {
+      lijst.append(el('p', { class: 'dim' }, 'Kies eerst een diploma.'));
+      return;
+    }
 
-    const eisen = check(await db.from('requirements')
+    // De eisen én hun onderdelen in één keer: de onderdelen zijn straks de
+    // antwoorden, dus je wilt meteen zien hoeveel er zijn.
+    const alles = check(await db.from('requirements')
       .select('id, position, title, kind, parent_id')
-      .eq('diploma_id', gekozenDiploma.value)
-      .eq('kind', soort.value)
-      .is('parent_id', null)
+      .eq('diploma_id', diplomaId)
       .order('position'));
 
-    if (eisen.length === 0) {
+    eisenNu = alles.filter((r) => !r.parent_id && r.kind === soort);
+    const onderdelenVan = (id) => alles.filter((r) => r.parent_id === id);
+
+    lijst.innerHTML = '';
+    if (eisenNu.length === 0) {
       lijst.append(el('p', { class: 'dim' }, 'Dit diploma heeft geen eisen van die soort.'));
       return;
     }
 
-    const vakjes = [];
-    for (const eis of eisen) {
-      const aan = el('input', { type: 'checkbox' });
-      aan.dataset.eis = eis.id;
-      aan.dataset.titel = eis.title;
-      if (alGebruikt.has(eis.id)) {
-        aan.disabled = true;
-        aan.checked = true;
-      }
-      vakjes.push(aan);
-      lijst.append(el('div', { class: 'part' },
-        el('label', { class: alGebruikt.has(eis.id) ? 'dim' : '' },
-          aan, ` ${eis.position}. ${eis.title}`),
-        alGebruikt.has(eis.id) ? el('span', { class: 'dim' }, 'staat er al') : null));
-    }
+    for (const eis of eisenNu) {
+      const staatErAl = alGebruikt.has(eis.id);
+      const aantal = onderdelenVan(eis.id).length;
+      const aan = gekozen.has(eis.id);
 
-    lijst.append(el('div', { class: 'row', style: 'margin-top:10px' },
-      el('button', {
-        class: 'btn',
-        onclick: async () => {
-          const kiezen = vakjes.filter((v) => v.checked && !v.disabled);
-          if (kiezen.length === 0) return;
-
-          let position = vragen.length
-            ? Math.max(...vragen.map((q) => q.position)) + 1
-            : 1;
-          const nieuwe = kiezen.map((v) => ({
-            exam_id: ex.id,
-            position: position++,
-            prompt: v.dataset.titel,
-            requirement_id: v.dataset.eis,
-          }));
-
-          await run(async () => check(await db.from('exam_questions').insert(nieuwe)),
-            `${nieuwe.length} ${nieuwe.length === 1 ? 'vraag' : 'vragen'} toegevoegd`);
-          render();
+      const regel = el('button', {
+        class: `keuzeregel${aan ? ' aan' : ''}${staatErAl ? ' uit' : ''}`,
+        onclick: () => {
+          if (staatErAl) return;
+          if (gekozen.has(eis.id)) gekozen.delete(eis.id);
+          else gekozen.add(eis.id);
+          laden();
         },
-      }, 'Toevoegen als vragen'),
-      el('span', { class: 'dim' }, 'De antwoorden zet je er daarna zelf onder.')));
+      },
+        el('span', {}, `${eis.position}. ${eis.title}`),
+        el('span', { class: 'dim' },
+          staatErAl ? 'staat er al' : aantal ? `${aantal} onderdelen` : ''));
+
+      lijst.append(regel);
+    }
+    tekenVoet();
   };
 
-  gekozenDiploma.addEventListener('change', laden);
-  soort.addEventListener('change', laden);
-  details.addEventListener('toggle', () => { if (details.open) laden(); });
+  const toevoegen = async () => {
+    const kiezen = eisenNu.filter((e) => gekozen.has(e.id));
+    if (kiezen.length === 0) return;
 
-  return details;
+    const onderdelen = vorm === 'onderdelen'
+      ? check(await db.from('requirements').select('id, parent_id, position, title')
+          .in('parent_id', kiezen.map((e) => e.id)).order('position'))
+      : [];
+
+    let position = vragen.length ? Math.max(...vragen.map((q) => q.position)) + 1 : 1;
+
+    await run(async () => {
+      const nieuwe = check(await db.from('exam_questions').insert(
+        kiezen.map((eis) => ({
+          exam_id: ex.id,
+          position: position++,
+          prompt: eis.title,
+          kind: vorm === 'juist_onjuist' ? 'juist_onjuist' : 'meerkeuze',
+          requirement_id: eis.id,
+        })),
+      ).select('id, requirement_id'));
+
+      // De antwoorden erbij, zodat er zo min mogelijk te tikken valt. Welke goed
+      // is laat ik leeg: dat weet alleen de instructeur, en een gokje van mij
+      // zou stil in een examen belanden.
+      const opties = [];
+      for (const vraag of nieuwe) {
+        if (vorm === 'juist_onjuist') {
+          opties.push(
+            { question_id: vraag.id, position: 1, label: 'Juist' },
+            { question_id: vraag.id, position: 2, label: 'Onjuist' },
+          );
+        } else if (vorm === 'onderdelen') {
+          const mijne = onderdelen.filter((o) => o.parent_id === vraag.requirement_id);
+          mijne.forEach((o, i) => {
+            opties.push({ question_id: vraag.id, position: i + 1, label: o.title });
+          });
+        }
+      }
+      if (opties.length) check(await db.from('exam_options').insert(opties));
+    }, `${kiezen.length} ${kiezen.length === 1 ? 'vraag' : 'vragen'} toegevoegd`);
+
+    render();
+  };
+
+  tekenKoppen();
+  laden();
+
+  return doos;
 }
 
 function vraagBlock(vraag, opties, buren, eis) {
@@ -1457,19 +1546,26 @@ function vraagBlock(vraag, opties, buren, eis) {
       'Bij deze vraag staat nog geen goed antwoord aangevinkt. Zolang dat zo is, rekent hij hem altijd fout.'));
   }
 
+  // Eén tik markeert het goede antwoord, en de tekst bewaart zichzelf zodra je
+  // uit het veld klikt. Aanvinken plus apart opslaan was twee handelingen te
+  // veel voor iets wat je twintig keer per examen doet.
   for (const optie of opties) {
     const label = el('input', { value: optie.label });
-    const goed = el('input', { type: 'checkbox' });
-    goed.checked = optie.correct;
+    label.addEventListener('blur', () => {
+      const tekst = label.value.trim();
+      if (!tekst || tekst === optie.label) return;
+      run(async () => check(await db.from('exam_options').update({ label: tekst })
+        .eq('id', optie.id)), 'Opgeslagen');
+      optie.label = tekst;
+    });
+
     wrap.append(el('div', { class: 'part' },
       el('span', { class: 'dim' }, `${optie.position}.`), label,
-      el('label', { class: 'dim' }, goed, ' goed'),
-      el('button', {
-        class: 'btn ghost',
-        onclick: () => run(async () => check(await db.from('exam_options').update({
-          label: label.value.trim(), correct: goed.checked,
-        }).eq('id', optie.id)), 'Opgeslagen'),
-      }, 'Opslaan'),
+      chip(optie.correct ? 'goed' : 'fout', optie.correct, async () => {
+        await run(async () => check(await db.from('exam_options')
+          .update({ correct: !optie.correct }).eq('id', optie.id)));
+        render();
+      }),
       el('button', {
         class: 'btn danger',
         onclick: async () => {
@@ -1480,30 +1576,54 @@ function vraagBlock(vraag, opties, buren, eis) {
       }, '×')));
   }
 
+  const volgende = () => (opties.length ? Math.max(...opties.map((o) => o.position)) + 1 : 1);
+
   const nieuw = el('input', { placeholder: 'Nieuw antwoord' });
+  const toevoegen = async (labels) => {
+    let position = volgende();
+    await run(async () => check(await db.from('exam_options').insert(
+      labels.map((l) => ({ question_id: vraag.id, position: position++, label: l })),
+    )), labels.length === 1 ? 'Antwoord toegevoegd' : 'Antwoorden toegevoegd');
+    render();
+  };
+
+  nieuw.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter' && nieuw.value.trim()) toevoegen([nieuw.value.trim()]);
+  });
+
   wrap.append(el('div', { class: 'part' }, nieuw,
     el('button', {
       class: 'btn',
-      onclick: async () => {
-        if (!nieuw.value.trim()) return;
-        const position = opties.length ? Math.max(...opties.map((o) => o.position)) + 1 : 1;
-        await run(async () => check(await db.from('exam_options').insert({
-          question_id: vraag.id, position, label: nieuw.value.trim(),
-        })), 'Antwoord toegevoegd');
-        render();
-      },
+      onclick: () => { if (nieuw.value.trim()) toevoegen([nieuw.value.trim()]); },
     }, 'Toevoegen')));
+
+  // Twee veelgebruikte setjes, zodat je ze niet hoeft te typen.
+  if (opties.length === 0) {
+    wrap.append(el('div', { class: 'row', style: 'margin-top:6px; gap:6px' },
+      el('span', { class: 'dim' }, 'Of zet er snel neer:'),
+      chip('Juist / onjuist', false, () => toevoegen(['Juist', 'Onjuist'])),
+      chip('Vier lege antwoorden', false, () =>
+        toevoegen(['Antwoord 1', 'Antwoord 2', 'Antwoord 3', 'Antwoord 4']))));
+  }
 
   return wrap;
 }
 
 function nieuweVraag(examId, vragen) {
   const tekst = el('input', { placeholder: 'Nieuwe vraag' });
-  const soort = el('select', {},
-    el('option', { value: 'meerkeuze' }, 'Meerkeuze'),
-    el('option', { value: 'juist_onjuist' }, 'Juist / onjuist'));
 
-  return el('div', { class: 'row', style: 'margin:8px 0 4px' }, tekst, soort,
+  // Twee mogelijkheden zijn geen uitklaplijst waard; twee knoppen wel.
+  const soort = { value: 'meerkeuze' };
+  const rij = el('div', { class: 'row', style: 'gap:6px' });
+  const tekenSoort = () => {
+    rij.innerHTML = '';
+    for (const [waarde, naam] of [['meerkeuze', 'Meerkeuze'], ['juist_onjuist', 'Juist / onjuist']]) {
+      rij.append(chip(naam, soort.value === waarde, () => { soort.value = waarde; tekenSoort(); }));
+    }
+  };
+  tekenSoort();
+
+  return el('div', { class: 'row', style: 'margin:8px 0 4px' }, tekst, rij,
     el('button', {
       class: 'btn',
       onclick: async () => {
