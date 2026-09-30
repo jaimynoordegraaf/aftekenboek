@@ -14,6 +14,13 @@ mkdirSync(uit, { recursive: true });
 const LINKS = 150;   // waar de linkerkolom begint
 const RECHTS = 600;  // en waar hij ophoudt; daarnaast staan de antwoorden
 const REGEL = 55;    // hoger dan dit is geen tekstregel meer
+const GAT = 22;      // wit binnen één tekening
+
+// Let op het gat. Een tekening met een label erboven en eronder — "A" boven de
+// wal, "D" eronder — heeft daar witruimte tussen. Stond die marge te krap, dan
+// knipte dit script alleen het middenstuk eruit en verdwenen twee antwoorden
+// uit beeld. Kijk de uitsnedes na voordat je ze gebruikt; ze zijn met het oog
+// sneller bijgesteld dan met een scherpere regel.
 
 const gevonden = [];
 
@@ -41,7 +48,7 @@ for (let p = 2; p <= paginas + 1; p++) {
       leeg = 0;
     } else if (start !== null) {
       leeg++;
-      if (leeg > 6) {
+      if (leeg > GAT) {
         banden.push([start, y - leeg]);
         start = null;
       }
