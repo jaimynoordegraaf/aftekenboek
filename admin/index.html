@@ -66,6 +66,12 @@
   }
   button.chip { border: 0; cursor: pointer; font-family: inherit; padding: 5px 12px; }
   button.chip.on { background: var(--accent); color: var(--on-accent); }
+  .pil {
+    display: inline-block; padding: 3px 10px; border-radius: 999px;
+    font-size: 13px; font-weight: 600;
+  }
+  .pil.goed { background: var(--good); color: var(--card); }
+  .pil.gezakt { background: var(--danger); color: var(--card); }
   .voortgang {
     height: 8px; border-radius: 4px; background: var(--chip); overflow: hidden;
     margin-top: 10px;
@@ -1999,8 +2005,16 @@ function deelnemerRij(rij, sessie) {
     el('b', {}, rij.display_name),
     el('span', { class: 'dim' },
       klaar
-        ? `ingeleverd — ${rij.score} van ${rij.total}`
+        ? `${rij.score} van ${rij.total}${rij.percent === null ? '' : ` — ${rij.percent}%`}`
         : `bezig — ${rij.beantwoord} van ${rij.vragen} beantwoord`),
+    // De uitslag als pil, zodat je bij twintig deelnemers in één blik ziet wie
+    // erdoor is. De grens komt uit het examen zelf.
+    klaar
+      ? el('span', {
+          class: rij.geslaagd ? 'pil goed' : 'pil gezakt',
+          title: `Geslaagd vanaf ${rij.grens}%`,
+        }, rij.geslaagd ? 'geslaagd' : 'niet gehaald')
+      : null,
     el('button', {
       class: 'btn ghost',
       onclick: async () => {

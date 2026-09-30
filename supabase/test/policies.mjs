@@ -100,6 +100,7 @@ async function main() {
     '021-examenvraag-bij-eis.sql',
     '022-examen-aftekenen.sql',
     '023-examen-afbeeldingen.sql',
+    '024-examen-geslaagd.sql',
     '010-eisen.sql',
   ]) {
     try {
@@ -1287,6 +1288,16 @@ async function main() {
     `${ingeleverd.score} van ${ingeleverd.total}`);
   const bezig = overzicht.find((r) => r.display_name === 'Daan Visser');
   check('en wie nog bezig is niet', bezig.submitted_at === null, String(bezig.submitted_at));
+
+  // Geslaagd of niet hoort de database te zeggen: de grens staat bij het examen.
+  check('het overzicht rekent het percentage uit', Number(ingeleverd.percent) === 50,
+    String(ingeleverd.percent));
+  check('en zegt dat dit niet gehaald is', ingeleverd.geslaagd === false,
+    String(ingeleverd.geslaagd));
+  check('met de grens van dit examen erbij', Number(ingeleverd.grens) === 60,
+    String(ingeleverd.grens));
+  check('wie nog bezig is, is niet gezakt maar onbekend', bezig.geslaagd === null,
+    String(bezig.geslaagd));
 
   check('met hun namen', overzicht[0].display_name === 'Anouk Bakker',
     overzicht[0].display_name);

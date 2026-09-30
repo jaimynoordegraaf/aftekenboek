@@ -63,6 +63,8 @@ project dat al bestaat:
     023-examen-afbeeldingen.sql
                               de opslagmap voor plaatjes bij een vraag:
                               iedereen mag lezen, alleen instructeurs uploaden
+    024-examen-geslaagd.sql   het deelnemersoverzicht zegt erbij of iemand
+                              geslaagd is, met het percentage en de grens
 
 `010-eisen.sql` draait **als laatste**, ook al is zijn nummer lager. De catalogus
 hangt aan elke schemawijziging die erna genummerd is, dus hij wordt steeds
