@@ -517,6 +517,7 @@ async function start() {
 // ---------------------------------------------------------------- schermen
 
 function render() {
+  if (typeof stopMeekijken === 'function') stopMeekijken();
   const view = document.getElementById('view');
   view.innerHTML = '';
   if (tab === 'leden') renderLeden(view);
@@ -1246,6 +1247,7 @@ function examenBlock(ex, diplomas) {
       body.append(vraagBlock(vraag, opties.filter((o) => o.question_id === vraag.id), vragen));
     }
     body.append(nieuweVraag(ex.id, vragen));
+    body.append(sessiesBlock(ex));
   });
 
   return details;
@@ -1366,6 +1368,184 @@ function nieuweVraag(examId, vragen) {
         render();
       },
     }, 'Toevoegen'));
+}
+
+// ---- Examens: afnemen en meekijken
+//
+// Een sessie is één afname, met een code die je voorleest. Zolang hij open is
+// ververst het overzicht zichzelf, zodat je op een groot scherm kunt zien wie
+// binnen is en hoe ver iedereen is.
+
+let examenTeller = null;
+
+function stopMeekijken() {
+  if (examenTeller) clearInterval(examenTeller);
+  examenTeller = null;
+}
+
+function sessiesBlock(ex) {
+  const doos = el('div', {});
+  doos.append(el('h3', {}, 'Afnemen'));
+
+  const label = field('Waarvoor (optioneel)', '', {});
+  label.input.placeholder = 'Herfstkamp, dinsdagavond';
+  const uren = field('Open voor (uur)', 6, { wrapClass: 'num' });
+  uren.input.type = 'number';
+  const uitslag = el('input', { type: 'checkbox' });
+  uitslag.checked = true;
+
+  doos.append(el('div', { class: 'row' }, label.wrap, uren.wrap,
+    el('label', { class: 'dim' }, uitslag, ' Deelnemer ziet zijn score'),
+    el('button', {
+      class: 'btn',
+      onclick: async () => {
+        await run(async () => check(await db.rpc('open_exam_session', {
+          p_exam: ex.id,
+          p_label: label.input.value.trim() || null,
+          p_hours: Math.max(1, Math.min(24, Number(uren.input.value) || 6)),
+          p_show_result: uitslag.checked,
+        })), 'Sessie geopend');
+        render();
+      },
+    }, 'Sessie starten')));
+
+  const lijst = el('div', { style: 'margin-top:12px' },
+    el('p', { class: 'dim' }, 'Bezig met laden…'));
+  doos.append(lijst);
+
+  (async () => {
+    const sessies = check(await db.from('exam_sessions').select('*')
+      .eq('exam_id', ex.id).order('opened_at', { ascending: false }));
+    lijst.innerHTML = '';
+    if (sessies.length === 0) {
+      lijst.append(el('p', { class: 'dim' }, 'Nog niet afgenomen.'));
+      return;
+    }
+    for (const sessie of sessies) lijst.append(sessieBlock(sessie));
+  })();
+
+  return doos;
+}
+
+function sessieBlock(sessie) {
+  const open = sessie.status === 'open' && new Date(sessie.closes_at) > new Date();
+  const details = el('details', {});
+  details.append(el('summary', {},
+    `${sessie.code} — ${sessie.label ?? 'zonder naam'} — ${open ? 'open' : 'gesloten'}`));
+
+  const body = el('div', { style: 'margin-top:12px' });
+  details.append(body);
+
+  details.addEventListener('toggle', () => {
+    stopMeekijken();
+    if (!details.open) return;
+    body.innerHTML = '';
+
+    // De code groot, om voor te lezen of op een scherm te zetten.
+    body.append(el('div', { class: 'card', style: 'text-align:center; background:var(--bg)' },
+      el('div', { style: 'font-size:44px; font-weight:700; letter-spacing:.2em' }, sessie.code),
+      el('p', { class: 'dim' }, open
+        ? `Open tot ${new Date(sessie.closes_at).toLocaleString('nl-NL')}. Invullen kan op scoutingjwf.nl/examen/.`
+        : 'Gesloten. Er kan niets meer bij.')));
+
+    if (open) {
+      body.append(el('div', { class: 'row' },
+        el('button', {
+          class: 'btn danger',
+          onclick: async () => {
+            if (!confirmed('Sessie sluiten?\n\nWie nog bezig is, kan niets meer inleveren.')) return;
+            await run(async () => check(await db.rpc('close_exam_session', { p_session: sessie.id })), 'Gesloten');
+            render();
+          },
+        }, 'Sessie sluiten')));
+    }
+
+    const tabel = el('div', { style: 'margin-top:12px' });
+    body.append(tabel);
+
+    const verversen = async () => {
+      let rijen;
+      try {
+        rijen = check(await db.rpc('exam_session_overview', { p_session: sessie.id }));
+      } catch (e) {
+        stopMeekijken();
+        tabel.innerHTML = '';
+        tabel.append(el('p', { class: 'note' }, e.message ?? String(e)));
+        return;
+      }
+      tabel.innerHTML = '';
+      if (rijen.length === 0) {
+        tabel.append(el('p', { class: 'dim' }, 'Nog niemand binnen.'));
+        return;
+      }
+      for (const rij of rijen) tabel.append(deelnemerRij(rij, sessie));
+    };
+
+    verversen();
+    // Alleen blijven kijken zolang er iets kan veranderen.
+    if (open) examenTeller = setInterval(verversen, 4000);
+  });
+
+  return details;
+}
+
+function deelnemerRij(rij, sessie) {
+  const klaar = rij.submitted_at !== null;
+  const wrap = el('div', { class: 'card', style: 'background:var(--bg)' });
+
+  wrap.append(el('div', { class: 'row' },
+    el('b', {}, rij.display_name),
+    el('span', { class: 'dim' },
+      klaar
+        ? `ingeleverd — ${rij.score} van ${rij.total}`
+        : `bezig — ${rij.beantwoord} van ${rij.vragen} beantwoord`),
+    el('button', {
+      class: 'btn ghost',
+      onclick: async () => {
+        const regels = check(await db.rpc('exam_attempt_detail', { p_attempt: rij.attempt_id }));
+        const doos = el('div', { style: 'margin-top:8px' });
+        for (const r of regels) {
+          doos.append(el('div', { class: 'part' },
+            el('span', { class: 'dim' }, `${r.position}.`),
+            el('span', {}, r.prompt),
+            el('span', { class: r.correct ? 'good' : 'dim' },
+              (r.gekozen ?? 'niets') + (r.correct ? ' ✓' : ` (goed: ${r.juiste ?? '—'})`))));
+        }
+        wrap.append(doos);
+      },
+    }, 'Antwoorden'),
+    el('button', {
+      class: 'btn danger',
+      onclick: async () => {
+        if (!confirmed(`${rij.display_name} weghalen uit deze sessie?\n\nZijn antwoorden gaan mee.`)) return;
+        await run(async () => check(await db.rpc('exam_attempt_remove', { p_attempt: rij.attempt_id })), 'Weggehaald');
+        render();
+      },
+    }, 'Weghalen')));
+
+  // Koppelen aan een vaarder, zodat je later weet wie deze Anouk was. Aftekenen
+  // blijft handwerk: een fout in een vraag hoort niet vanzelf in een
+  // vorderingenstaat te belanden.
+  const kiezer = el('select', {}, el('option', { value: '' }, 'Niet gekoppeld'));
+  kiezer.dataset.gevuld = '';
+  kiezer.addEventListener('mousedown', async () => {
+    if (kiezer.dataset.gevuld) return;
+    kiezer.dataset.gevuld = '1';
+    const leden = check(await db.rpc('group_members', { p_group: group.id }));
+    for (const lid of leden) {
+      kiezer.append(el('option',
+        { value: lid.profile_id, selected: lid.profile_id === rij.profile_id },
+        lid.full_name));
+    }
+  });
+  kiezer.addEventListener('change', () => run(async () => check(await db.rpc('exam_attempt_link', {
+    p_attempt: rij.attempt_id, p_profile: kiezer.value || null,
+  })), 'Gekoppeld'));
+
+  wrap.append(el('div', { class: 'row', style: 'margin-top:8px' },
+    el('span', { class: 'dim' }, 'Hoort bij'), kiezer));
+
+  return wrap;
 }
 
 // ---------------------------------------------------------------- start

@@ -18,7 +18,9 @@
     "icons": "node scripts/icons.mjs",
     "feature-graphic": "node scripts/feature-graphic.mjs",
     "screenshots": "node scripts/store-screenshots.mjs",
-    "handleiding": "node scripts/handleiding-pdf.mjs docs/handleiding.html docs/handleiding-print.html"
+    "handleiding": "node scripts/handleiding-pdf.mjs docs/handleiding.html docs/handleiding-print.html",
+    "examen": "node admin/serve.mjs examen",
+    "examen:build": "node admin/build.mjs examen"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

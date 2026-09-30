@@ -20,7 +20,10 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..');
-const out = join(root, 'dist-admin');
+// Dezelfde stappen voor beide pagina's; PAGE kiest welke.
+const pagina = process.argv[2] === 'examen' ? 'examen' : 'admin';
+const bron = join(root, pagina);
+const out = join(root, pagina === 'examen' ? 'dist-examen' : 'dist-admin');
 
 function fail(message) {
   console.error(`\n  ${message}\n`);
@@ -59,12 +62,12 @@ await mkdir(out, { recursive: true });
 
 await writeFile(
   join(out, 'index.html'),
-  await readFile(join(here, 'index.html'), 'utf8'),
+  await readFile(join(bron, 'index.html'), 'utf8'),
 );
 
 await writeFile(
   join(out, 'config.js'),
-  `// Gegenereerd door npm run admin:build — niet met de hand bijwerken.\n` +
+  `// Gegenereerd door ${pagina === 'examen' ? 'npm run examen:build' : 'npm run admin:build'} — niet met de hand bijwerken.\n` +
     `window.AFTEKENBOEK = ${JSON.stringify({ url, key }, null, 2)};\n`,
 );
 
@@ -89,7 +92,7 @@ await writeFile(
 
 await writeFile(
   join(out, 'LEESMIJ.txt'),
-  `Beheerpagina Vinkje
+  `${pagina === 'examen' ? 'Examenpagina' : 'Beheerpagina'} Vinkje
 ========================
 
 Upload de inhoud van deze map naar een submap van je website, bijvoorbeeld:
@@ -127,5 +130,5 @@ console.log(`  Server:               ${url}`);
 // Geen stuk van de sleutel echoën: die hoort in het bestand, niet in een
 // terminallog dat iemand over je schouder meeleest of in een issue plakt.
 console.log(`  Sleutel:              publishable, ${key.length} tekens\n`);
-console.log('  Upload de inhoud naar een submap van je site, bijvoorbeeld /beheer/.');
-console.log('  De stappen staan in dist-admin/LEESMIJ.txt.\n');
+console.log(`  Upload de inhoud naar een submap van je site, bijvoorbeeld /${pagina}/.`);
+console.log(`  De stappen staan in ${pagina === 'examen' ? 'dist-examen' : 'dist-admin'}/LEESMIJ.txt.\n`);

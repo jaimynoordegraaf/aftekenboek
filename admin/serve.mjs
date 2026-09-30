@@ -18,7 +18,12 @@ import { dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const port = Number(process.env.PORT ?? 8090);
+
+// Twee pagina's draaien op hetzelfde servertje: de beheerpagina en het examen.
+// PAGE kiest de map, zodat hier geen tweede kopie van dit bestand naast hoeft
+// te staan die vervolgens uit de pas gaat lopen.
+const pagina = process.argv[2] === 'examen' ? 'examen' : 'admin';
+const port = Number(process.env.PORT ?? (pagina === 'examen' ? 8091 : 8090));
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -67,7 +72,7 @@ const server = createServer(async (req, res) => {
   }
 
   try {
-    const body = await readFile(join(here, file));
+    const body = await readFile(join(here, '..', pagina, file));
     res.writeHead(200, {
       'content-type': TYPES[extname(file)] ?? 'application/octet-stream',
       'cache-control': 'no-store',
@@ -80,6 +85,6 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(port, () => {
-  console.log(`\n  Beheerpagina:  http://localhost:${port}\n`);
+  console.log(`\n  ${pagina === 'examen' ? 'Examenpagina' : 'Beheerpagina'}:  http://localhost:${port}\n`);
   console.log('  Stoppen met Ctrl+C.\n');
 });

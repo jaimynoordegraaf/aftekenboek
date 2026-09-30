@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vinkje — examen</title>
+<style>
+  :root {
+    --bg: #f4f5f3; --card: #fff; --border: #e1e3df; --text: #161a17;
+    --dim: #5a605b; --accent: #14445f; --on-accent: #fff; --good: #1b6b3a;
+    --warn: #8a5a00; --danger: #b3261e; --chip: #ebede9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101210; --card: #1b1e1c; --border: #2c302d; --text: #f1f3f0;
+      --dim: #9ba29d; --accent: #7fb2cf; --on-accent: #101210; --good: #6fd397;
+      --warn: #e0b252; --danger: #f2b8b5; --chip: #262a27;
+    }
+    :root { color-scheme: dark; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 17px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif;
+    padding: 0 16px 48px;
+  }
+  main { max-width: 640px; margin: 0 auto; }
+  header.merk {
+    display: flex; align-items: center; gap: 10px;
+    padding: 20px 0 8px; max-width: 640px; margin: 0 auto;
+  }
+  header.merk svg { width: 34px; height: 34px; }
+  header.merk b { font-size: 17px; }
+  h1 { font-size: 26px; line-height: 1.2; margin: 0 0 4px; }
+  h2 { font-size: 20px; line-height: 1.3; margin: 0 0 12px; }
+  p { margin: 0 0 12px; }
+  .dim { color: var(--dim); }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 20px; margin-bottom: 16px;
+  }
+  label { display: block; font-size: 14px; color: var(--dim); margin-bottom: 6px; }
+  input[type=text] {
+    width: 100%; font: inherit; padding: 14px; border-radius: 10px;
+    border: 1px solid var(--border); background: var(--bg); color: var(--text);
+  }
+  input.code { text-transform: uppercase; letter-spacing: .28em; font-size: 24px; text-align: center; }
+  button {
+    font: inherit; font-weight: 600; padding: 14px 18px; border-radius: 10px;
+    border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent);
+    cursor: pointer; min-height: 52px; width: 100%;
+  }
+  button.stil { background: transparent; color: var(--text); border-color: var(--border); }
+  button[disabled] { opacity: .5; cursor: default; }
+  .knoppen { display: flex; gap: 10px; margin-top: 16px; }
+  .knoppen button { width: auto; flex: 1; }
+  .melding {
+    border-left: 4px solid var(--danger); padding: 10px 14px; margin-bottom: 16px;
+    background: var(--card); border-radius: 0 10px 10px 0;
+  }
+  .melding.rustig { border-left-color: var(--accent); }
+  .balk { height: 6px; background: var(--chip); border-radius: 3px; overflow: hidden; margin-bottom: 18px; }
+  .balk > i { display: block; height: 100%; background: var(--accent); transition: width .2s; }
+  .keuze {
+    display: block; width: 100%; text-align: left; margin-bottom: 10px;
+    background: var(--card); color: var(--text); border: 1px solid var(--border);
+    font-weight: 500; line-height: 1.4;
+  }
+  .keuze[aria-pressed="true"] {
+    border-color: var(--accent); background: var(--chip); font-weight: 600;
+  }
+  .vraag img { max-width: 100%; border-radius: 10px; margin-bottom: 12px; }
+  .lijst { display: grid; gap: 8px; margin: 0 0 16px; padding: 0; list-style: none; }
+  .lijst li {
+    display: flex; gap: 10px; justify-content: space-between; align-items: baseline;
+    border-bottom: 1px solid var(--border); padding-bottom: 8px;
+  }
+  .lijst b { font-weight: 600; }
+  .open { color: var(--warn); font-size: 14px; }
+  .klaar { color: var(--good); font-size: 14px; }
+  .uitslag { font-size: 40px; font-weight: 700; margin: 0 0 4px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<header class="merk">
+  <svg viewBox="0 0 1024 1024" aria-hidden="true">
+    <defs><linearGradient id="jwf" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1E8CCA"/><stop offset=".5" stop-color="#34A0A2"/><stop offset="1" stop-color="#5ABC5B"/>
+    </linearGradient></defs>
+    <rect width="1024" height="1024" rx="230" fill="url(#jwf)"/>
+    <g transform="translate(512 512) scale(1.3) translate(-512 -512)" fill="none" stroke="#161616"
+       stroke-width="52" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M362 432 L462 532 L662 332"/>
+      <path d="M302 664 C337 636, 372 636, 407 664 S477 692, 512 664 S582 636, 617 664 S687 692, 722 664"/>
+    </g>
+  </svg>
+  <b>Vinkje</b>
+</header>
+
+<main id="view"></main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<!-- Relatief, want de pagina hangt onder scoutingjwf.nl/examen/. -->
+<script src="config.js"></script>
+<script>
+// Het examen zoals een vaarder het ziet.
+//
+// Deze pagina praat met vijf functies en raakt geen enkele tabel aan; dat kan
+// ook niet, want zonder inloggen laat de database niets los. Het juiste antwoord
+// zit niet in wat hier binnenkomt: nakijken gebeurt op de server.
+//
+// Wat hier wel ligt, ligt in localStorage: welke deelname bij deze code hoort.
+// Anders is een per ongeluk ververste pagina een kwijtgeraakt examen.
+
+const cfg = window.AFTEKENBOEK ?? { url: '', key: '' };
+const db = cfg.url && cfg.key ? window.supabase.createClient(cfg.url, cfg.key, {
+  auth: { persistSession: false },
+}) : null;
+
+const view = document.getElementById('view');
+const BEWAAR = 'vinkje-examen';
+
+let staat = laadStaat();
+
+function laadStaat() {
+  try {
+    return JSON.parse(localStorage.getItem(BEWAAR) ?? 'null') ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function bewaar() {
+  try {
+    localStorage.setItem(BEWAAR, JSON.stringify(staat));
+  } catch {
+    // Een telefoon in privémodus mag dit weigeren; dan werkt alles nog, maar
+    // overleeft het niet het verversen van de pagina.
+  }
+}
+
+function el(tag, props = {}, ...kids) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2), v);
+    else if (v !== null && v !== undefined) node.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) {
+    if (kid === null || kid === undefined) continue;
+    node.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
+  }
+  return node;
+}
+
+function fout(e) {
+  const tekst = e?.message ?? String(e);
+  // Foutmeldingen uit de database zijn al in het Nederlands geschreven; de rest
+  // vertaalt niemand, dus die vangen we op met een gewone zin.
+  return /[A-Z]/.test(tekst) && tekst.length < 120
+    ? tekst
+    : 'Er ging iets mis. Probeer het opnieuw, of vraag je instructeur om hulp.';
+}
+
+async function roep(naam, args) {
+  const { data, error } = await db.rpc(naam, args);
+  if (error) throw error;
+  return data;
+}
+
+// ---------------------------------------------------------------- schermen
+
+function toon(...knopen) {
+  view.innerHTML = '';
+  for (const k of knopen) if (k) view.append(k);
+}
+
+function schermCode(melding) {
+  const invoer = el('input', { type: 'text', class: 'code', maxlength: '6',
+    autocapitalize: 'characters', autocomplete: 'off', inputmode: 'text',
+    placeholder: 'ABC234' });
+
+  const verder = el('button', {}, 'Verder');
+  verder.addEventListener('click', async () => {
+    const code = invoer.value.trim().toUpperCase();
+    if (code.length < 4) return;
+    verder.disabled = true;
+    try {
+      const rijen = await roep('exam_session_info', { p_code: code });
+      const info = rijen?.[0];
+      if (!info) {
+        schermCode('Deze code kennen we niet. Kijk hem nog eens na.');
+        return;
+      }
+      if (!info.open) {
+        schermCode('Dit examen is gesloten. Vraag je instructeur om een nieuwe code.');
+        return;
+      }
+      schermNaam(code, info);
+    } catch (e) {
+      schermCode(fout(e));
+    }
+  });
+
+  invoer.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') verder.click(); });
+
+  toon(
+    melding ? el('div', { class: 'melding' }, melding) : null,
+    el('div', { class: 'card' },
+      el('h1', {}, 'Examen'),
+      el('p', { class: 'dim' }, 'Vul de code in die je instructeur voorleest.'),
+      el('label', { for: 'code' }, 'Code'),
+      invoer,
+      el('div', { class: 'knoppen' }, verder)),
+  );
+  invoer.focus();
+}
+
+function schermNaam(code, info) {
+  const naam = el('input', { type: 'text', autocomplete: 'name',
+    placeholder: 'Voor- en achternaam' });
+
+  const start = el('button', {}, 'Beginnen');
+  start.addEventListener('click', async () => {
+    if (naam.value.trim().length < 2) return;
+    start.disabled = true;
+    try {
+      const rijen = await roep('exam_join', { p_code: code, p_name: naam.value.trim() });
+      const deelname = rijen?.[0];
+      staat = {
+        code,
+        attempt: deelname.attempt_id,
+        token: deelname.token,
+        title: deelname.title,
+        questions: deelname.questions,
+        answers: {},
+        at: 0,
+      };
+      bewaar();
+      schermVraag();
+    } catch (e) {
+      start.disabled = false;
+      toon(el('div', { class: 'melding' }, fout(e)));
+      view.append(el('div', { class: 'knoppen' },
+        el('button', { class: 'stil', onclick: () => schermCode() }, 'Opnieuw')));
+    }
+  });
+
+  naam.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') start.click(); });
+
+  toon(el('div', { class: 'card' },
+    el('h1', {}, info.title),
+    info.intro ? el('p', { class: 'dim' }, info.intro) : null,
+    el('p', { class: 'dim' }, `${info.vragen} vragen.`),
+    el('label', {}, 'Je naam'),
+    naam,
+    el('p', { class: 'dim', style: 'margin-top:12px' },
+      'Je instructeur ziet deze naam bij je antwoorden, dus schrijf hem zoals hij je kent.'),
+    el('div', { class: 'knoppen' }, start)));
+  naam.focus();
+}
+
+function schermVraag() {
+  const vragen = staat.questions ?? [];
+  const i = Math.max(0, Math.min(staat.at ?? 0, vragen.length - 1));
+  const vraag = vragen[i];
+  if (!vraag) return schermOverzicht();
+
+  const gekozen = staat.answers?.[vraag.id];
+
+  const opties = (vraag.options ?? []).map((optie) =>
+    el('button', {
+      class: 'keuze',
+      'aria-pressed': gekozen === optie.id ? 'true' : 'false',
+      onclick: async () => {
+        staat.answers[vraag.id] = optie.id;
+        staat.at = i + 1;
+        bewaar();
+        try {
+          await roep('exam_answer', {
+            p_attempt: staat.attempt, p_token: staat.token,
+            p_question: vraag.id, p_option: optie.id,
+          });
+        } catch (e) {
+          toon(el('div', { class: 'melding' }, fout(e)),
+            el('div', { class: 'knoppen' },
+              el('button', { class: 'stil', onclick: () => schermVraag() }, 'Terug')));
+          return;
+        }
+        if (staat.at >= vragen.length) schermOverzicht();
+        else schermVraag();
+      },
+    }, optie.label));
+
+  const balk = el('div', { class: 'balk' },
+    el('i', { style: `width:${Math.round(((i) / vragen.length) * 100)}%` }));
+
+  toon(
+    balk,
+    el('p', { class: 'dim' }, `Vraag ${i + 1} van ${vragen.length}`),
+    el('div', { class: 'card vraag' },
+      vraag.image_path ? el('img', { src: afbeelding(vraag.image_path), alt: '' }) : null,
+      el('h2', {}, vraag.prompt),
+      opties),
+    el('div', { class: 'knoppen' },
+      el('button', {
+        class: 'stil',
+        onclick: () => { staat.at = i - 1; bewaar(); i > 0 ? schermVraag() : schermOverzicht(); },
+      }, i > 0 ? 'Vorige' : 'Overzicht'),
+      el('button', {
+        class: 'stil',
+        onclick: () => { staat.at = i + 1; bewaar(); staat.at >= vragen.length ? schermOverzicht() : schermVraag(); },
+      }, 'Overslaan')),
+  );
+}
+
+function afbeelding(pad) {
+  // De opslagmap bij Supabase is openbaar leesbaar: het zijn plaatjes bij een
+  // vraag, geen gegevens over iemand.
+  return `${cfg.url}/storage/v1/object/public/examen/${pad}`;
+}
+
+function schermOverzicht() {
+  const vragen = staat.questions ?? [];
+  const open = vragen.filter((v) => !staat.answers?.[v.id]);
+
+  const inleveren = el('button', {}, 'Inleveren');
+  inleveren.addEventListener('click', async () => {
+    inleveren.disabled = true;
+    try {
+      const rijen = await roep('exam_submit', { p_attempt: staat.attempt, p_token: staat.token });
+      staat.uitslag = rijen?.[0] ?? null;
+      staat.klaar = true;
+      bewaar();
+      schermUitslag();
+    } catch (e) {
+      inleveren.disabled = false;
+      view.prepend(el('div', { class: 'melding' }, fout(e)));
+    }
+  });
+
+  toon(
+    el('div', { class: 'card' },
+      el('h1', {}, 'Klaar om in te leveren?'),
+      open.length
+        ? el('p', { class: 'dim' },
+            `Je hebt ${open.length} ${open.length === 1 ? 'vraag' : 'vragen'} nog niet beantwoord. ` +
+            'Die tellen als fout.')
+        : el('p', { class: 'dim' }, 'Je hebt alles beantwoord.'),
+      el('ul', { class: 'lijst' }, vragen.map((v, n) =>
+        el('li', {},
+          el('span', {}, el('b', {}, `${n + 1}. `), v.prompt.slice(0, 60)),
+          staat.answers?.[v.id]
+            ? el('span', { class: 'klaar' }, 'beantwoord')
+            : el('button', {
+                class: 'stil', style: 'width:auto;min-height:0;padding:6px 10px',
+                onclick: () => { staat.at = n; bewaar(); schermVraag(); },
+              }, 'invullen')))),
+      el('div', { class: 'knoppen' },
+        el('button', {
+          class: 'stil',
+          onclick: () => { staat.at = 0; bewaar(); schermVraag(); },
+        }, 'Terug'),
+        inleveren)),
+    el('p', { class: 'dim' }, 'Na het inleveren kun je niets meer wijzigen.'),
+  );
+}
+
+function schermUitslag() {
+  const u = staat.uitslag;
+  const opnieuw = el('button', { class: 'stil' }, 'Klaar');
+  opnieuw.addEventListener('click', () => {
+    staat = {};
+    bewaar();
+    schermCode();
+  });
+
+  toon(el('div', { class: 'card' },
+    el('h1', {}, 'Ingeleverd'),
+    u && u.show_result
+      ? el('div', {},
+          el('p', { class: 'uitslag' }, `${u.percent}%`),
+          el('p', { class: 'dim' }, `${u.score} van de ${u.total} punten.`),
+          el('p', {}, u.passed ? 'Gehaald.' : 'Nog niet gehaald — je instructeur kijkt met je mee.'))
+      : el('p', { class: 'dim' },
+          'Je antwoorden staan erin. Je instructeur kijkt ze na en bespreekt de uitslag met je.'),
+    el('div', { class: 'knoppen' }, opnieuw)));
+}
+
+// ---------------------------------------------------------------- start
+
+if (!db) {
+  toon(el('div', { class: 'melding' },
+    'Deze pagina is niet gekoppeld aan de server. Vraag de beheerder om config.js.'));
+} else if (staat.klaar) {
+  schermUitslag();
+} else if (staat.attempt && staat.questions) {
+  // Een halfafgemaakt examen na een ververste pagina: verdergaan waar je was.
+  schermVraag();
+} else {
+  schermCode();
+}
+</script>
+</body>
+</html>
