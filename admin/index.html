@@ -1193,6 +1193,121 @@ async function renderExamens(view) {
       }, 'Maken'))));
 
   view.append(doos);
+  view.append(importBlok());
+}
+
+/**
+ * Een examen inlezen uit een bestand.
+ *
+ * De inlezer (scripts/examen-import.mjs) maakt van een CWO-examen-PDF een
+ * bestand met de vragen, de vier antwoorden, welk antwoord goed is en de
+ * plaatjes. Hier komt dat binnen: het examen wordt aangemaakt, de vragen
+ * eronder, en de plaatjes gaan naar de opslagmap.
+ *
+ * Schrijven gebeurt met jouw account, want alleen een ingelogde instructeur
+ * mag dat. Een script met een sleutel dat buiten de browser draait zou die
+ * regel omzeilen, en dan staat die sleutel ergens in een bestand.
+ */
+function importBlok() {
+  const doos = el('div', { class: 'card' });
+  doos.append(el('h3', {}, 'Examen inlezen'));
+  doos.append(el('p', { class: 'dim' },
+    'Kies een bestand dat met scripts/examen-import.mjs uit een examen-PDF is gemaakt. ' +
+    'Het examen, de vragen, de antwoorden en de plaatjes komen er in één keer in.'));
+
+  const kiezer = el('input', { type: 'file', accept: '.json,application/json' });
+  const stand = el('div', { class: 'dim', style: 'margin-top:8px' });
+
+  doos.append(el('div', { class: 'row' }, kiezer,
+    el('button', {
+      class: 'btn',
+      onclick: async () => {
+        const bestand = kiezer.files?.[0];
+        if (!bestand) return;
+
+        let data;
+        try {
+          data = JSON.parse(await bestand.text());
+        } catch {
+          stand.textContent = 'Dat bestand is geen geldig importbestand.';
+          return;
+        }
+        if (!data?.vragen?.length) {
+          stand.textContent = 'Er staan geen vragen in dat bestand.';
+          return;
+        }
+
+        await lezenIn(data, (tekst) => { stand.textContent = tekst; });
+      },
+    }, 'Inlezen')));
+
+  doos.append(stand);
+  return doos;
+}
+
+async function lezenIn(data, meld) {
+  meld('Examen aanmaken…');
+
+  const examen = check(await db.from('exams').insert({
+    group_id: group.id,
+    title: data.titel ?? 'Ingelezen examen',
+    intro: data.intro ?? null,
+    pass_percent: Math.max(0, Math.min(100, Number(data.grens) || 70)),
+  }).select('id'));
+  const examId = examen[0].id;
+
+  // Vragen en antwoorden in één keer per soort: 35 losse verzoeken duren op een
+  // trage verbinding in het clubhuis ongemakkelijk lang.
+  meld(`${data.vragen.length} vragen toevoegen…`);
+  const vragen = check(await db.from('exam_questions').insert(
+    data.vragen.map((v, i) => ({
+      exam_id: examId,
+      position: v.nummer ?? i + 1,
+      prompt: v.vraag,
+      kind: 'meerkeuze',
+      points: 1,
+    })),
+  ).select('id, position'));
+
+  const opties = [];
+  for (const v of data.vragen) {
+    const vraag = vragen.find((q) => q.position === v.nummer);
+    if (!vraag) continue;
+    v.antwoorden.forEach((label, i) => {
+      opties.push({
+        question_id: vraag.id,
+        position: i + 1,
+        label,
+        // `goed` is de index uit het nakijkblad: 0 is a, 1 is b, enzovoort.
+        correct: i === v.goed,
+      });
+    });
+  }
+  check(await db.from('exam_options').insert(opties));
+
+  // De plaatjes. Eén voor één, zodat je ziet hoever hij is en een mislukte
+  // upload de rest niet meesleept.
+  const metPlaatje = data.vragen.filter((v) => v.plaatje);
+  let gedaan = 0;
+  for (const v of metPlaatje) {
+    const vraag = vragen.find((q) => q.position === v.nummer);
+    if (!vraag) continue;
+    meld(`Plaatjes uploaden… ${++gedaan} van ${metPlaatje.length}`);
+
+    const bytes = Uint8Array.from(atob(v.plaatje.base64), (c) => c.charCodeAt(0));
+    const pad = `${examId}/${vraag.id}.png`;
+    const op = await db.storage.from('examen').upload(pad, new Blob([bytes], { type: 'image/png' }), {
+      upsert: true, contentType: 'image/png',
+    });
+    if (op.error) {
+      meld(`Plaatje bij vraag ${v.nummer} lukte niet: ${op.error.message}`);
+      continue;
+    }
+    check(await db.from('exam_questions').update({ image_path: pad }).eq('id', vraag.id));
+  }
+
+  say(`${data.titel} staat erin: ${vragen.length} vragen, ${gedaan} plaatjes.`, 'ok');
+  render();
 }
 
 function examenBlock(ex, diplomas) {

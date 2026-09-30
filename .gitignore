@@ -17,3 +17,7 @@ expo-env.d.ts
 dist-admin/
 docs/handleiding-print.html
 dist-examen/
+
+# Examenvragen zijn van de werkgroep CWO-examenvragen; die horen niet in een
+# openbare repo.
+examens-import/

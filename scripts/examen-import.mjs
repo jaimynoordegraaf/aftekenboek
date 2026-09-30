@@ -22,9 +22,9 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
 
-const [bron, doel] = process.argv.slice(2);
+const [bron, doel, plaatjesMap] = process.argv.slice(2);
 if (!bron) {
-  console.error('Gebruik: node scripts/examen-import.mjs "<pdf>" [uit.json]');
+  console.error('Gebruik: node scripts/examen-import.mjs "<pdf>" [uit.json] [plaatjesmap]');
   process.exit(1);
 }
 
@@ -228,6 +228,26 @@ for (const v of vragen) {
 // instructeur bij het nalopen; in de beheerpagina is elke regel toch tekst die
 // je kunt bijwerken.
 
+// De plaatjes erbij, als die al uit de PDF zijn gehaald. Ze gaan als base64 in
+// hetzelfde bestand: dan is het importeren één bestand kiezen in plaats van een
+// map vol losse dingen die in de verkeerde volgorde terechtkomen.
+let metPlaatje = 0;
+if (plaatjesMap) {
+  const lijst = JSON.parse(readFileSync(`${plaatjesMap}/plaatjes.json`, 'utf8'));
+  for (const v of vragen) {
+    const hoort = lijst.filter((g) => g.vraag === v.nummer);
+    if (hoort.length === 0) continue;
+    // Bij meer dan één plaatje het grootste: de kleintjes zijn pijlen en
+    // windvanen die bij de tekening horen, niet de tekening zelf.
+    const grootste = hoort.sort((a, b) => b.breedte * b.hoogte - a.breedte * a.hoogte)[0];
+    v.plaatje = {
+      naam: grootste.bestand,
+      base64: readFileSync(`${plaatjesMap}/${grootste.bestand}`).toString('base64'),
+    };
+    metPlaatje++;
+  }
+}
+
 const uit = {
   titel,
   grens,
@@ -243,6 +263,7 @@ console.log(`${titel}`);
 console.log(`  vragen gevonden: ${vragen.length}${uit.verwacht ? ` van de ${uit.verwacht}` : ''}`);
 console.log(`  met antwoordsleutel: ${vragen.filter((v) => v.goed >= 0).length}`);
 console.log(`  geslaagd vanaf: ${grens}%`);
+if (plaatjesMap) console.log(`  met een plaatje: ${metPlaatje}`);
 const missend = uit.verwacht
   ? [...Array(uit.verwacht).keys()].map((n) => n + 1).filter((n) => !vragen.some((v) => v.nummer === n))
   : [];
