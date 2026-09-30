@@ -326,9 +326,51 @@ if (plaatjesMap) {
   }
 }
 
+// De hoofdstukken op het nakijkblad zijn dezelfde onderwerpen als de
+// theorie-eisen van het diploma, alleen anders genoemd. Deze tabel legt dat
+// vast, zodat een uitslag straks per eis te lezen is en je hem met één knop kunt
+// aftekenen.
+//
+// Wat hier niet in staat, blijft ongekoppeld: liever een vraag zonder eis dan
+// een vraag onder de verkeerde.
+const EIS_PER_HOOFDSTUK = {
+  'schiemanswerk': 't1',
+  'terminologie': 't2',
+  'term': 't2',
+  'zeiltermen': 't2',
+  'onderdelen': 't3',
+  'schip en tuig': 't3',
+  'veiligheid': 't4',
+  'bpr': 't5',
+  'reglementen': 't5',
+  'koppels en krachten': 't6',
+  'krachten': 't6',
+  'gedragsregels': 't7',
+  'etiquette': 't7',
+  'etiq': 't7',
+  'het weer': 't8',
+  'weer': 't8',
+  'vaarproblematiek': 't9',
+};
+
+const diplomaCode = titelMatch
+  ? `kielboot-${{ I: 1, II: 2, III: 3, IV: 4 }[titelMatch[1].toUpperCase()] ?? ''}`
+  : null;
+
+let gekoppeld = 0;
+if (diplomaCode) {
+  for (const v of vragen) {
+    const suffix = EIS_PER_HOOFDSTUK[(v.hoofdstuk ?? '').toLowerCase().trim()];
+    if (!suffix) continue;
+    v.eis = `${diplomaCode}.${suffix}`;
+    gekoppeld++;
+  }
+}
+
 const uit = {
   titel,
   grens,
+  diploma: diplomaCode,
   verwacht: totaalRegel ? Number(totaalRegel[1]) : null,
   vragen,
 };
@@ -342,6 +384,7 @@ console.log(`  vragen gevonden: ${vragen.length}${uit.verwacht ? ` van de ${uit.
 console.log(`  met antwoordsleutel: ${vragen.filter((v) => v.goed >= 0).length}`);
 console.log(`  geslaagd vanaf: ${grens}%`);
 if (plaatjesMap) console.log(`  met een plaatje: ${metPlaatje}`);
+console.log(`  gekoppeld aan een eis: ${gekoppeld}`);
 const missend = uit.verwacht
   ? [...Array(uit.verwacht).keys()].map((n) => n + 1).filter((n) => !vragen.some((v) => v.nummer === n))
   : [];

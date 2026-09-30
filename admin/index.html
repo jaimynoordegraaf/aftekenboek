@@ -1288,7 +1288,7 @@ function importBlok() {
     knop.disabled = true;
     try {
       const klaar = await lezenIn(data, meld);
-      await meld(`Klaar: ${klaar.vragen} vragen, ${klaar.plaatjes} plaatjes.`, 1);
+      await meld(`Klaar: ${klaar.vragen} vragen, ${klaar.plaatjes} plaatjes, ${klaar.eisen} aan een eis gekoppeld.`, 1);
       doos.append(el('div', { class: 'row', style: 'margin-top:10px' },
         el('button', { class: 'btn', onclick: () => render() }, 'Vernieuwen')));
     } catch (e) {
@@ -1328,6 +1328,17 @@ async function lezenIn(data, meld) {
 
   // Vragen en antwoorden in één keer per soort: 35 losse verzoeken duren op een
   // trage verbinding in het clubhuis ongemakkelijk lang.
+  // Het importbestand noemt per vraag de eis waar hij over gaat, met de code
+  // die in de catalogus staat ("kielboot-2.t5"). Die codes hier omzetten naar
+  // ids: dan weet een uitslag straks per eis hoe het ging.
+  const eisCodes = [...new Set(data.vragen.map((v) => v.eis).filter(Boolean))];
+  let eisVan = {};
+  if (eisCodes.length) {
+    await meld('Eisen opzoeken…', 0.1);
+    const gevonden = check(await db.from('requirements').select('id, code').in('code', eisCodes));
+    eisVan = Object.fromEntries(gevonden.map((r) => [r.code, r.id]));
+  }
+
   await meld(`${data.vragen.length} vragen toevoegen…`, 0.15);
   const vragen = check(await db.from('exam_questions').insert(
     data.vragen.map((v, i) => ({
@@ -1336,6 +1347,7 @@ async function lezenIn(data, meld) {
       prompt: schoneTekst(v.vraag),
       kind: 'meerkeuze',
       points: 1,
+      requirement_id: eisVan[v.eis] ?? null,
     })),
   ).select('id, position'));
 
@@ -1379,8 +1391,9 @@ async function lezenIn(data, meld) {
     check(await db.from('exam_questions').update({ image_path: pad }).eq('id', vraag.id));
   }
 
-  say(`${data.titel} staat erin: ${vragen.length} vragen, ${gedaan} plaatjes.`, 'ok');
-  return { vragen: vragen.length, plaatjes: gedaan };
+  const metEis = data.vragen.filter((v) => eisVan[v.eis]).length;
+  say(`${data.titel} staat erin: ${vragen.length} vragen, ${gedaan} plaatjes, ${metEis} aan een eis gekoppeld.`, 'ok');
+  return { vragen: vragen.length, plaatjes: gedaan, eisen: metEis };
 }
 
 function examenBlock(ex, diplomas) {
