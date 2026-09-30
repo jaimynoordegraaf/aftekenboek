@@ -1277,12 +1277,24 @@ function importBlok() {
   return doos;
 }
 
+/**
+ * Tekst die de database aanneemt.
+ *
+ * Postgres weigert een \u0000 in tekst, en terecht. Bij het uitpakken van een
+ * PDF kan zo'n teken meeliften, en dan strandt een hele import op één antwoord.
+ * Alles vanaf het eerste stuurteken gaat eraf.
+ */
+function schoneTekst(tekst) {
+  const stuur = /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.exec(tekst ?? '');
+  return (stuur ? String(tekst).slice(0, stuur.index) : String(tekst ?? '')).trim();
+}
+
 async function lezenIn(data, meld) {
   await meld(`${data.titel ?? 'Examen'} aanmaken…`, 0.05);
 
   const examen = check(await db.from('exams').insert({
     group_id: group.id,
-    title: data.titel ?? 'Ingelezen examen',
+    title: schoneTekst(data.titel) || 'Ingelezen examen',
     intro: data.intro ?? null,
     pass_percent: Math.max(0, Math.min(100, Number(data.grens) || 70)),
   }).select('id'));
@@ -1295,7 +1307,7 @@ async function lezenIn(data, meld) {
     data.vragen.map((v, i) => ({
       exam_id: examId,
       position: v.nummer ?? i + 1,
-      prompt: v.vraag,
+      prompt: schoneTekst(v.vraag),
       kind: 'meerkeuze',
       points: 1,
     })),
@@ -1309,7 +1321,7 @@ async function lezenIn(data, meld) {
       opties.push({
         question_id: vraag.id,
         position: i + 1,
-        label,
+        label: schoneTekst(label),
         // `goed` is de index uit het nakijkblad: 0 is a, 1 is b, enzovoort.
         correct: i === v.goed,
       });

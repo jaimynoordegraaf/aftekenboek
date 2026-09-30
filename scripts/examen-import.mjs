@@ -90,9 +90,23 @@ const HOOFDSTUKKEN = [
   'Schip en tuig', 'Etiquette', 'Krachten', 'Schip', 'Term', 'Etiq',
 ];
 
+/**
+ * Tekst die veilig de database in kan.
+ *
+ * Een enkele keer loopt het uitpakken door in bytes die geen tekst zijn — een
+ * plaatje dat direct achter een tekstblok begint. Dat eindigt in stuurtekens,
+ * en Postgres weigert daar terecht een \u0000 in. Alles vanaf het eerste
+ * stuurteken gaat er dus af; wat ervoor staat is de echte zin.
+ */
+function schoon(tekst) {
+  const stuur = /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.exec(tekst ?? '');
+  const tot = stuur ? tekst.slice(0, stuur.index) : (tekst ?? '');
+  return tot.replace(/\s+/g, ' ').trim();
+}
+
 /** Een kopje dat achter een antwoord of vraag is blijven hangen, eraf halen. */
 function zonderKopje(tekst) {
-  let uit = tekst.trim();
+  let uit = schoon(tekst);
   for (const h of HOOFDSTUKKEN) {
     const re = new RegExp(`\\s*${h}\\s*$`, 'i');
     if (re.test(uit)) uit = uit.replace(re, '').trim();
