@@ -96,6 +96,7 @@ async function main() {
     '017-account-verwijderen.sql',
     '018-eigen-lijsten.sql',
     '019-examens.sql',
+    '020-examen-nakijken.sql',
     '010-eisen.sql',
   ]) {
     try {
@@ -1206,6 +1207,32 @@ async function main() {
     `${uitslag.score} van ${uitslag.total}`);
   check('en zegt of het gehaald is', uitslag.passed === false, String(uitslag.passed));
 
+  // Nakijken mag pas na het inleveren, en alleen als de sessie het toestaat.
+  const nagekeken = await as('', async () =>
+    (await db.query(`select * from exam_review($1, $2)`, [mee.attempt_id, mee.token])).rows,
+  );
+  check('na inleveren mag je je antwoorden zien', nagekeken.length === 2,
+    `${nagekeken.length}`);
+  check('met goed en fout erbij',
+    nagekeken[0].correct === true && nagekeken[1].correct === false,
+    JSON.stringify(nagekeken.map((r) => r.correct)));
+  check('en wat het juiste antwoord was', nagekeken[1].juiste === 'Meer naar de wind toe',
+    String(nagekeken[1].juiste));
+
+  const nogBezig = await refused('', `select * from exam_review($1, $2)`, [
+    mee2.attempt_id,
+    mee2.token,
+  ]);
+  check('wie nog bezig is ziet niets', nogBezig !== null, 'het lukte wel');
+
+  await db.exec(`update exam_sessions set show_answers = false where id = '${sessie.session_id}'`);
+  const dichtgehouden = await refused('', `select * from exam_review($1, $2)`, [
+    mee.attempt_id,
+    mee.token,
+  ]);
+  check('en met nakijken uit ziet niemand ze', dichtgehouden !== null, 'het lukte wel');
+  await db.exec(`update exam_sessions set show_answers = true where id = '${sessie.session_id}'`);
+
   const naInleveren = await refused('', `select exam_answer($1, $2, $3, $4)`, [
     mee.attempt_id,
     mee.token,
@@ -1219,6 +1246,16 @@ async function main() {
     (await db.query(`select * from exam_session_overview($1)`, [sessie.session_id])).rows,
   );
   check('de instructeur ziet beide deelnemers', overzicht.length === 2, `${overzicht.length}`);
+  // Precies wat de beheerpagina toont: staat er na inleveren ook echt dat het
+  // ingeleverd is, met de score erbij?
+  const ingeleverd = overzicht.find((r) => r.display_name === 'Anouk Bakker');
+  check('de ingeleverde deelname staat als ingeleverd', ingeleverd.submitted_at !== null,
+    String(ingeleverd.submitted_at));
+  check('met de score erbij', Number(ingeleverd.score) === 1 && Number(ingeleverd.total) === 2,
+    `${ingeleverd.score} van ${ingeleverd.total}`);
+  const bezig = overzicht.find((r) => r.display_name === 'Daan Visser');
+  check('en wie nog bezig is niet', bezig.submitted_at === null, String(bezig.submitted_at));
+
   check('met hun namen', overzicht[0].display_name === 'Anouk Bakker',
     overzicht[0].display_name);
   const overzichtVreemde = await as(ander, async () =>

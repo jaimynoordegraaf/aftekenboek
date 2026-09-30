@@ -120,25 +120,49 @@ const db = cfg.url && cfg.key ? window.supabase.createClient(cfg.url, cfg.key, {
 }) : null;
 
 const view = document.getElementById('view');
+// De bewaarde deelname hangt aan zijn code. Eén sleutel voor alles ging mis:
+// wie vorige week een examen deed, hervatte dat vandaag zonder het te zien, en
+// leverde dus de verkeerde deelname in — terwijl de instructeur naar de nieuwe
+// sessie zat te kijken en niets binnen zag komen.
 const BEWAAR = 'vinkje-examen';
+const sleutel = (code) => `${BEWAAR}:${code}`;
 
-let staat = laadStaat();
+let staat = laatsteStaat();
 
-function laadStaat() {
+function laatsteStaat() {
   try {
-    return JSON.parse(localStorage.getItem(BEWAAR) ?? 'null') ?? {};
+    const codes = Object.keys(localStorage).filter((k) => k.startsWith(`${BEWAAR}:`));
+    const alles = codes
+      .map((k) => {
+        try { return JSON.parse(localStorage.getItem(k) ?? 'null'); } catch { return null; }
+      })
+      .filter((s) => s && s.attempt);
+    // De laatste waar iemand mee bezig was; de rest blijft staan voor het geval
+    // hij terugkomt op een oude code.
+    return alles.sort((a, b) => (b.tijd ?? 0) - (a.tijd ?? 0))[0] ?? {};
   } catch {
     return {};
   }
 }
 
 function bewaar() {
+  if (!staat.code) return;
+  staat.tijd = Date.now();
   try {
-    localStorage.setItem(BEWAAR, JSON.stringify(staat));
+    localStorage.setItem(sleutel(staat.code), JSON.stringify(staat));
   } catch {
     // Een telefoon in privémodus mag dit weigeren; dan werkt alles nog, maar
     // overleeft het niet het verversen van de pagina.
   }
+}
+
+function vergeet() {
+  try {
+    if (staat.code) localStorage.removeItem(sleutel(staat.code));
+  } catch {
+    // niets aan te doen, en niets aan verloren
+  }
+  staat = {};
 }
 
 function el(tag, props = {}, ...kids) {
@@ -371,12 +395,11 @@ function schermUitslag() {
   const u = staat.uitslag;
   const opnieuw = el('button', { class: 'stil' }, 'Klaar');
   opnieuw.addEventListener('click', () => {
-    staat = {};
-    bewaar();
+    vergeet();
     schermCode();
   });
 
-  toon(el('div', { class: 'card' },
+  const kaart = el('div', { class: 'card' },
     el('h1', {}, 'Ingeleverd'),
     u && u.show_result
       ? el('div', {},
@@ -384,11 +407,63 @@ function schermUitslag() {
           el('p', { class: 'dim' }, `${u.score} van de ${u.total} punten.`),
           el('p', {}, u.passed ? 'Gehaald.' : 'Nog niet gehaald — je instructeur kijkt met je mee.'))
       : el('p', { class: 'dim' },
-          'Je antwoorden staan erin. Je instructeur kijkt ze na en bespreekt de uitslag met je.'),
-    el('div', { class: 'knoppen' }, opnieuw)));
+          'Je antwoorden staan erin. Je instructeur kijkt ze na en bespreekt de uitslag met je.'));
+
+  const nakijken = el('div', {});
+
+  if (u && u.show_answers) {
+    const knop = el('button', { class: 'stil' }, 'Bekijk je antwoorden');
+    knop.addEventListener('click', async () => {
+      knop.disabled = true;
+      try {
+        const regels = await roep('exam_review', {
+          p_attempt: staat.attempt, p_token: staat.token,
+        });
+        nakijken.innerHTML = '';
+        nakijken.append(el('div', { class: 'card' },
+          el('h2', {}, 'Je antwoorden'),
+          el('ul', { class: 'lijst' }, regels.map((r) =>
+            el('li', {},
+              el('span', {},
+                el('b', {}, `${r.position}. `), r.prompt,
+                el('br', {}),
+                el('span', { class: 'dim' },
+                  `Jij: ${r.gekozen ?? 'niets ingevuld'}`,
+                  r.correct ? '' : ` — goed was: ${r.juiste ?? '—'}`)),
+              el('span', { class: r.correct ? 'klaar' : 'open' },
+                r.correct ? 'goed' : 'fout'))))));
+      } catch (e) {
+        knop.disabled = false;
+        nakijken.innerHTML = '';
+        nakijken.append(el('div', { class: 'melding rustig' }, fout(e)));
+      }
+    });
+    kaart.append(el('div', { class: 'knoppen' }, knop));
+  }
+
+  kaart.append(el('div', { class: 'knoppen' }, opnieuw));
+  toon(kaart, nakijken);
 }
 
 // ---------------------------------------------------------------- start
+
+// Een bewaarde deelname wordt nooit stil hervat: je ziet eerst wélke het is.
+// Anders vul je zonder het te merken een examen van vorige week in.
+function schermVerder() {
+  const beantwoord = Object.keys(staat.answers ?? {}).length;
+  const totaal = (staat.questions ?? []).length;
+
+  toon(el('div', { class: 'card' },
+    el('h1', {}, 'Je was nog bezig'),
+    el('p', {}, staat.title ?? 'Een examen'),
+    el('p', { class: 'dim' }, `Code ${staat.code} — ${beantwoord} van de ${totaal} vragen beantwoord.`),
+    el('div', { class: 'knoppen' },
+      el('button', { onclick: () => schermVraag() }, 'Verdergaan'),
+      el('button', {
+        class: 'stil',
+        onclick: () => { vergeet(); schermCode(); },
+      }, 'Ander examen'))));
+}
 
 if (!db) {
   toon(el('div', { class: 'melding' },
@@ -396,8 +471,7 @@ if (!db) {
 } else if (staat.klaar) {
   schermUitslag();
 } else if (staat.attempt && staat.questions) {
-  // Een halfafgemaakt examen na een ververste pagina: verdergaan waar je was.
-  schermVraag();
+  schermVerder();
 } else {
   schermCode();
 }

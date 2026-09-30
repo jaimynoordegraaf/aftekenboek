@@ -53,6 +53,8 @@ project dat al bestaat:
                               landelijk wordt weer alleen-lezen
     019-examens.sql           examens maken, afnemen met een sessiecode en
                               meekijken; deelnemers hebben geen account
+    020-examen-nakijken.sql   na het inleveren zien wat goed en fout was, als
+                              de sessie dat toestaat
 
 `010-eisen.sql` draait **als laatste**, ook al is zijn nummer lager. De catalogus
 hangt aan elke schemawijziging die erna genummerd is, dus hij wordt steeds

@@ -1393,9 +1393,12 @@ function sessiesBlock(ex) {
   uren.input.type = 'number';
   const uitslag = el('input', { type: 'checkbox' });
   uitslag.checked = true;
+  const nakijken = el('input', { type: 'checkbox' });
+  nakijken.checked = true;
 
   doos.append(el('div', { class: 'row' }, label.wrap, uren.wrap,
     el('label', { class: 'dim' }, uitslag, ' Deelnemer ziet zijn score'),
+    el('label', { class: 'dim' }, nakijken, ' … en welke vragen goed waren'),
     el('button', {
       class: 'btn',
       onclick: async () => {
@@ -1404,6 +1407,7 @@ function sessiesBlock(ex) {
           p_label: label.input.value.trim() || null,
           p_hours: Math.max(1, Math.min(24, Number(uren.input.value) || 6)),
           p_show_result: uitslag.checked,
+          p_show_answers: nakijken.checked,
         })), 'Sessie geopend');
         render();
       },
