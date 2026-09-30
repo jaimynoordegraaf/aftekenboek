@@ -150,6 +150,7 @@
       <button data-tab="speltakken">Speltakken</button>
       <button data-tab="bakken">Bakken</button>
       <button data-tab="catalogus">Diploma's en eisen</button>
+      <button data-tab="examens">Examens</button>
     </nav>
     <span class="who" id="who"></span>
     <button class="btn ghost" id="signout">Uitloggen</button>
@@ -522,6 +523,7 @@ function render() {
   else if (tab === 'codes') renderCodes(view);
   else if (tab === 'speltakken') renderSpeltakken(view);
   else if (tab === 'bakken') renderBakken(view);
+  else if (tab === 'examens') renderExamens(view);
   else renderCatalogus(view);
 }
 
@@ -1134,6 +1136,233 @@ function nieuweEis(diplomaId, kind) {
           p_diploma: diplomaId, p_kind: kind, p_title: titel.value.trim(),
           p_detail: null, p_parent: null,
         })), 'Eis toegevoegd');
+        render();
+      },
+    }, 'Toevoegen'));
+}
+
+// ---- Examens
+//
+// Een examen is een lijst vragen die je één keer maakt en vaker gebruikt. Het
+// afnemen gebeurt later met een sessiecode; hier bouw je de vragen.
+//
+// Schrijven gaat gewoon op de tabellen: de policies uit 019 laten alleen
+// instructeurs en beheerders van deze groep erbij, en een lid van de groep kan
+// de vragen niet eens lezen. Wat een deelnemer zonder account doet, loopt via
+// de functies — daar komt dit scherm niet aan.
+
+async function renderExamens(view) {
+  view.append(el('h2', {}, 'Examens'));
+  view.append(el('p', { class: 'dim' },
+    'Vragen die je later met een sessiecode laat invullen. Een lid van de groep kan ze niet lezen, ' +
+    'en het juiste antwoord verlaat de server nooit: nakijken gebeurt in de database.'));
+
+  const [examens, diplomas] = await Promise.all([
+    run(async () => check(await db.from('exams').select('*')
+      .eq('group_id', group.id).order('created_at'))),
+    run(async () => check(await db.from('diplomas').select('id, name, kind').order('sort_order'))),
+  ]);
+
+  const doos = el('div', { class: 'card' });
+  if (examens.length === 0) doos.append(el('p', { class: 'dim' }, 'Nog geen examen.'));
+  for (const ex of examens) doos.append(examenBlock(ex, diplomas));
+
+  const naam = field('Titel', '', {});
+  naam.input.placeholder = 'Theorie Roeien I/II';
+  doos.append(el('details', {}, el('summary', {}, 'Nieuw examen'),
+    el('div', { class: 'row', style: 'margin-top:10px' }, naam.wrap,
+      el('button', {
+        class: 'btn',
+        onclick: async () => {
+          const titel = naam.input.value.trim();
+          if (titel.length < 2) return;
+          await run(async () => check(await db.from('exams').insert({
+            group_id: group.id, title: titel,
+          })), 'Examen gemaakt');
+          render();
+        },
+      }, 'Maken'))));
+
+  view.append(doos);
+}
+
+function examenBlock(ex, diplomas) {
+  const details = el('details', {});
+  details.append(el('summary', {}, ex.title));
+  const body = el('div', { style: 'margin-top:12px' }, el('p', { class: 'dim' }, 'Bezig met laden…'));
+  details.append(body);
+
+  details.addEventListener('toggle', async () => {
+    if (!details.open || details.dataset.loaded) return;
+    details.dataset.loaded = '1';
+    body.innerHTML = '';
+
+    const titel = field('Titel', ex.title, {});
+    const intro = field('Uitleg vooraf', ex.intro ?? '', { multiline: true, wrapClass: 'grow' });
+    const grens = field('Geslaagd vanaf (%)', ex.pass_percent, { wrapClass: 'num' });
+    grens.input.type = 'number';
+
+    const diploma = el('select', {},
+      el('option', { value: '' }, 'Geen diploma'),
+      ...diplomas.map((d) => el('option',
+        { value: d.id, selected: d.id === ex.diploma_id },
+        d.name + (d.kind === 'insigne' ? ' (insigne)' : ''))));
+
+    const schudden = el('input', { type: 'checkbox' });
+    schudden.checked = ex.shuffle;
+
+    body.append(el('div', { class: 'row' }, titel.wrap, grens.wrap, diploma));
+    body.append(el('div', { class: 'row', style: 'margin-top:10px' }, intro.wrap));
+    body.append(el('div', { class: 'row', style: 'margin-top:10px' },
+      el('label', { class: 'dim' }, schudden, ' Volgorde per deelnemer schudden'),
+      el('button', {
+        class: 'btn ghost',
+        onclick: () => run(async () => check(await db.from('exams').update({
+          title: titel.input.value.trim(),
+          intro: intro.input.value || null,
+          pass_percent: Math.max(0, Math.min(100, Number(grens.input.value) || 0)),
+          diploma_id: diploma.value || null,
+          shuffle: schudden.checked,
+        }).eq('id', ex.id)), 'Opgeslagen'),
+      }, 'Opslaan'),
+      el('button', {
+        class: 'btn danger',
+        onclick: async () => {
+          if (!confirmed(`${ex.title} verwijderen?\n\nAlle vragen gaan mee, en ook de afgenomen sessies met de antwoorden die daarin staan.`)) return;
+          await run(async () => check(await db.from('exams').delete().eq('id', ex.id)), 'Verwijderd');
+          render();
+        },
+      }, 'Examen verwijderen')));
+
+    const vragen = check(await db.from('exam_questions').select('*')
+      .eq('exam_id', ex.id).order('position'));
+    const opties = vragen.length
+      ? check(await db.from('exam_options').select('*')
+          .in('question_id', vragen.map((q) => q.id)).order('position'))
+      : [];
+
+    body.append(el('h3', {}, `${vragen.length} vragen`));
+    for (const vraag of vragen) {
+      body.append(vraagBlock(vraag, opties.filter((o) => o.question_id === vraag.id), vragen));
+    }
+    body.append(nieuweVraag(ex.id, vragen));
+  });
+
+  return details;
+}
+
+function vraagBlock(vraag, opties, buren) {
+  const wrap = el('div', { class: 'card', style: 'background:var(--bg)' });
+  const tekst = field('Vraag', vraag.prompt, { multiline: true });
+  const punten = field('Punten', vraag.points, { wrapClass: 'num' });
+  punten.input.type = 'number';
+
+  // Wisselen van plaats met een buur. De kolom is uniek per examen, dus de eerste
+  // stap parkeert het nummer op een negatieve waarde; anders botst hij met zichzelf.
+  const verplaats = async (richting) => {
+    const i = buren.findIndex((q) => q.id === vraag.id);
+    const buur = buren[i + richting];
+    if (!buur) return;
+    await run(async () => {
+      check(await db.from('exam_questions').update({ position: -1 }).eq('id', vraag.id));
+      check(await db.from('exam_questions').update({ position: vraag.position }).eq('id', buur.id));
+      check(await db.from('exam_questions').update({ position: buur.position }).eq('id', vraag.id));
+    }, 'Volgorde aangepast');
+    render();
+  };
+
+  wrap.append(el('div', { class: 'row' },
+    el('span', { class: 'dim' }, `${vraag.position}.`), tekst.wrap, punten.wrap,
+    el('button', { class: 'btn ghost', onclick: () => verplaats(-1) }, '↑'),
+    el('button', { class: 'btn ghost', onclick: () => verplaats(1) }, '↓'),
+    el('button', {
+      class: 'btn ghost',
+      onclick: () => run(async () => check(await db.from('exam_questions').update({
+        prompt: tekst.input.value.trim(),
+        points: Math.max(1, Number(punten.input.value) || 1),
+      }).eq('id', vraag.id)), 'Opgeslagen'),
+    }, 'Opslaan'),
+    el('button', {
+      class: 'btn danger',
+      onclick: async () => {
+        if (!confirmed(`Vraag "${vraag.prompt}" verwijderen?`)) return;
+        await run(async () => check(await db.from('exam_questions').delete().eq('id', vraag.id)), 'Verwijderd');
+        render();
+      },
+    }, 'Verwijderen')));
+
+  const juist = opties.some((o) => o.correct);
+  if (!juist) {
+    wrap.append(el('p', { class: 'note' },
+      'Bij deze vraag staat nog geen goed antwoord aangevinkt. Zolang dat zo is, rekent hij hem altijd fout.'));
+  }
+
+  for (const optie of opties) {
+    const label = el('input', { value: optie.label });
+    const goed = el('input', { type: 'checkbox' });
+    goed.checked = optie.correct;
+    wrap.append(el('div', { class: 'part' },
+      el('span', { class: 'dim' }, `${optie.position}.`), label,
+      el('label', { class: 'dim' }, goed, ' goed'),
+      el('button', {
+        class: 'btn ghost',
+        onclick: () => run(async () => check(await db.from('exam_options').update({
+          label: label.value.trim(), correct: goed.checked,
+        }).eq('id', optie.id)), 'Opgeslagen'),
+      }, 'Opslaan'),
+      el('button', {
+        class: 'btn danger',
+        onclick: async () => {
+          if (!confirmed(`Antwoord "${optie.label}" verwijderen?`)) return;
+          await run(async () => check(await db.from('exam_options').delete().eq('id', optie.id)), 'Verwijderd');
+          render();
+        },
+      }, '×')));
+  }
+
+  const nieuw = el('input', { placeholder: 'Nieuw antwoord' });
+  wrap.append(el('div', { class: 'part' }, nieuw,
+    el('button', {
+      class: 'btn',
+      onclick: async () => {
+        if (!nieuw.value.trim()) return;
+        const position = opties.length ? Math.max(...opties.map((o) => o.position)) + 1 : 1;
+        await run(async () => check(await db.from('exam_options').insert({
+          question_id: vraag.id, position, label: nieuw.value.trim(),
+        })), 'Antwoord toegevoegd');
+        render();
+      },
+    }, 'Toevoegen')));
+
+  return wrap;
+}
+
+function nieuweVraag(examId, vragen) {
+  const tekst = el('input', { placeholder: 'Nieuwe vraag' });
+  const soort = el('select', {},
+    el('option', { value: 'meerkeuze' }, 'Meerkeuze'),
+    el('option', { value: 'juist_onjuist' }, 'Juist / onjuist'));
+
+  return el('div', { class: 'row', style: 'margin:8px 0 4px' }, tekst, soort,
+    el('button', {
+      class: 'btn',
+      onclick: async () => {
+        if (!tekst.value.trim()) return;
+        const position = vragen.length ? Math.max(...vragen.map((q) => q.position)) + 1 : 1;
+        await run(async () => {
+          const rijen = check(await db.from('exam_questions').insert({
+            exam_id: examId, position, prompt: tekst.value.trim(), kind: soort.value,
+          }).select('id'));
+          // Juist/onjuist heeft maar één zinnig paar antwoorden; die zet het
+          // scherm er meteen bij, zodat jij alleen nog hoeft aan te vinken welke
+          // goed is.
+          if (soort.value === 'juist_onjuist') {
+            check(await db.from('exam_options').insert([
+              { question_id: rijen[0].id, position: 1, label: 'Juist' },
+              { question_id: rijen[0].id, position: 2, label: 'Onjuist' },
+            ]));
+          }
+        }, 'Vraag toegevoegd');
         render();
       },
     }, 'Toevoegen'));
