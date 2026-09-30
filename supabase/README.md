@@ -58,6 +58,11 @@ project dat al bestaat:
     021-examenvraag-bij-eis.sql
                               een examenvraag mag bij een eis horen, zodat je
                               een examen uit de eisenlijst kunt bouwen
+    022-examen-aftekenen.sql  een uitslag per eis bekijken en die eisen
+                              overnemen in de vorderingenstaat
+    023-examen-afbeeldingen.sql
+                              de opslagmap voor plaatjes bij een vraag:
+                              iedereen mag lezen, alleen instructeurs uploaden
 
 `010-eisen.sql` draait **als laatste**, ook al is zijn nummer lager. De catalogus
 hangt aan elke schemawijziging die erna genummerd is, dus hij wordt steeds

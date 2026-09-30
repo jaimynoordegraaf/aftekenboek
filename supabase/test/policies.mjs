@@ -98,6 +98,8 @@ async function main() {
     '019-examens.sql',
     '020-examen-nakijken.sql',
     '021-examenvraag-bij-eis.sql',
+    '022-examen-aftekenen.sql',
+    '023-examen-afbeeldingen.sql',
     '010-eisen.sql',
   ]) {
     try {
@@ -1299,6 +1301,70 @@ async function main() {
   );
   check('en kan de antwoorden nakijken', detail.length === 2 && detail[0].correct === true,
     JSON.stringify(detail.map((d) => d.correct)));
+
+  // Van een uitslag naar een aftekening: per eis zien hoe het ging, en die
+  // eisen overnemen in de vorderingenstaat — maar alleen als jij dat zegt.
+  const roeienEis = await one(
+    `select id from requirements where code = 'roeien-12.t1'`,
+  );
+  await as(kamp, () =>
+    db.query(`update exam_questions set requirement_id = $1 where id = $2`, [
+      roeienEis.id,
+      vraag[1],
+    ]),
+  );
+
+  const perEis = await as(kamp, async () =>
+    (await db.query(`select * from exam_attempt_requirements($1)`, [mee.attempt_id])).rows,
+  );
+  check('per eis zie je hoe het ging', perEis.length === 1,
+    JSON.stringify(perEis.map((r) => [r.eis_title, r.goed, r.vragen])));
+  check('met het aantal goede vragen',
+    Number(perEis[0]?.goed) === 1 && Number(perEis[0]?.vragen) === 1,
+    `${perEis[0]?.goed} van ${perEis[0]?.vragen}`);
+  check('en zonder opleiding is er niets om op af te tekenen',
+    perEis[0]?.enrollment_id === null, String(perEis[0]?.enrollment_id));
+
+  const zonderKoppeling = await refused(
+    kamp,
+    `select exam_sign_off_from_attempt($1, $2::uuid[])`,
+    [mee.attempt_id, [roeienEis.id]],
+  );
+  check('aftekenen kan niet zonder vaarder erbij', zonderKoppeling !== null, 'het lukte wel');
+
+  // Koppel de deelname aan Nina, die aan Roeien I/II werkt.
+  await as(kamp, () =>
+    db.query(`select exam_attempt_link($1, $2)`, [mee.attempt_id, nina]),
+  );
+  const metOpleiding = await as(kamp, async () =>
+    (await db.query(`select * from exam_attempt_requirements($1)`, [mee.attempt_id])).rows,
+  );
+  check('na koppelen wijst hij de opleiding aan',
+    metOpleiding[0]?.enrollment_id === ninaEnrollment,
+    String(metOpleiding[0]?.enrollment_id));
+
+  const overgenomen = await as(kamp, async () =>
+    (await db.query(`select exam_sign_off_from_attempt($1, $2::uuid[]) as n`, [
+      mee.attempt_id,
+      [roeienEis.id],
+    ])).rows[0].n,
+  );
+  check('de eis wordt afgetekend', Number(overgenomen) === 1, String(overgenomen));
+
+  const stand = await one(
+    `select status, note from sign_offs
+     where enrollment_id = '${ninaEnrollment}' and requirement_id = '${roeienEis.id}'`,
+  );
+  check('en staat op gehaald', stand?.status === 'gehaald', stand?.status ?? 'niets');
+  check('met een notitie waar hij vandaan komt', /^Examen /.test(stand?.note ?? ''),
+    stand?.note ?? '');
+
+  const doorVreemdeHand = await refused(
+    ander,
+    `select exam_sign_off_from_attempt($1, $2::uuid[])`,
+    [mee.attempt_id, [roeienEis.id]],
+  );
+  check('een andere groep kan hier niet aftekenen', doorVreemdeHand !== null, 'het lukte wel');
 
   // Sluiten is een slot, geen verzoek.
   await as(kamp, () => db.query(`select close_exam_session($1)`, [sessie.session_id]));

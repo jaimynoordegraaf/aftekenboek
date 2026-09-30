@@ -1407,6 +1407,50 @@ function vraagBlock(vraag, opties, buren, eis) {
       },
     }, 'Verwijderen')));
 
+  // Een plaatje bij de vraag: een verkeersteken, een knoop, een situatie op het
+  // water. Het bestand gaat naar de opslag van Supabase; in de database staat
+  // alleen het pad ernaartoe.
+  const plaatje = el('div', { style: 'margin:8px 0' });
+  if (vraag.image_path) {
+    plaatje.append(el('img', {
+      src: `${cfg.url}/storage/v1/object/public/examen/${vraag.image_path}`,
+      alt: '', style: 'max-width:220px; border-radius:8px; display:block; margin-bottom:6px',
+    }));
+  }
+  const kiesBestand = el('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp' });
+  plaatje.append(el('div', { class: 'row' }, kiesBestand,
+    el('button', {
+      class: 'btn ghost',
+      onclick: async () => {
+        const bestand = kiesBestand.files?.[0];
+        if (!bestand) return;
+        const ext = (bestand.name.split('.').pop() ?? 'png').toLowerCase();
+        const pad = `${vraag.exam_id}/${vraag.id}.${ext}`;
+        await run(async () => {
+          const op = await db.storage.from('examen').upload(pad, bestand, {
+            upsert: true, contentType: bestand.type,
+          });
+          if (op.error) throw op.error;
+          check(await db.from('exam_questions').update({ image_path: pad }).eq('id', vraag.id));
+        }, 'Plaatje toegevoegd');
+        render();
+      },
+    }, 'Plaatje uploaden'),
+    vraag.image_path
+      ? el('button', {
+          class: 'btn danger',
+          onclick: async () => {
+            if (!confirmed('Het plaatje bij deze vraag weghalen?')) return;
+            await run(async () => {
+              await db.storage.from('examen').remove([vraag.image_path]);
+              check(await db.from('exam_questions').update({ image_path: null }).eq('id', vraag.id));
+            }, 'Weggehaald');
+            render();
+          },
+        }, 'Plaatje weghalen')
+      : null));
+  wrap.append(plaatje);
+
   const juist = opties.some((o) => o.correct);
   if (!juist) {
     wrap.append(el('p', { class: 'note' },
@@ -1640,6 +1684,67 @@ function deelnemerRij(rij, sessie) {
         render();
       },
     }, 'Weghalen')));
+
+  // Van uitslag naar vorderingenstaat. Pas zichtbaar als er iets te beoordelen
+  // is: een ingeleverd examen van iemand die je hebt gekoppeld.
+  if (klaar) {
+    const aftekenen = el('div', {});
+    wrap.append(el('div', { class: 'row', style: 'margin-top:8px' },
+      el('button', {
+        class: 'btn ghost',
+        onclick: async () => {
+          const eisen = await run(async () => check(await db.rpc('exam_attempt_requirements', {
+            p_attempt: rij.attempt_id,
+          })));
+          aftekenen.innerHTML = '';
+
+          if (eisen.length === 0) {
+            aftekenen.append(el('p', { class: 'dim' },
+              'Geen van de vragen hangt aan een eis. Koppel vragen aan eisen via "Vragen uit de eisenlijst".'));
+            return;
+          }
+
+          const vakjes = [];
+          for (const eis of eisen) {
+            const aan = el('input', { type: 'checkbox' });
+            aan.dataset.eis = eis.requirement_id;
+            // Alles goed? Dan staat hij klaar om over te nemen. De rest vink je
+            // zelf aan, want een half goede eis is jouw oordeel, niet dat van
+            // een rekensom.
+            aan.checked = eis.enrollment_id !== null && eis.goed === eis.vragen;
+            aan.disabled = eis.enrollment_id === null;
+            vakjes.push(aan);
+
+            aftekenen.append(el('div', { class: 'part' },
+              el('label', { class: aan.disabled ? 'dim' : '' },
+                aan, ` ${eis.diploma_name} — ${eis.eis_position}. ${eis.eis_title}`),
+              el('span', { class: eis.goed === eis.vragen ? 'good' : 'dim' },
+                `${eis.goed} van ${eis.vragen} goed`),
+              el('span', { class: 'dim' },
+                eis.enrollment_id === null
+                  ? 'werkt niet aan dit diploma'
+                  : `nu: ${eis.huidige_status ?? 'niet behandeld'}`)));
+          }
+
+          aftekenen.append(el('div', { class: 'row', style: 'margin-top:10px' },
+            el('button', {
+              class: 'btn',
+              onclick: async () => {
+                const kiezen = vakjes.filter((v) => v.checked && !v.disabled)
+                  .map((v) => v.dataset.eis);
+                if (kiezen.length === 0) return;
+                if (!confirmed(`${kiezen.length} ${kiezen.length === 1 ? 'eis' : 'eisen'} op gehaald zetten voor ${rij.display_name}?`)) return;
+                await run(async () => check(await db.rpc('exam_sign_off_from_attempt', {
+                  p_attempt: rij.attempt_id, p_requirements: kiezen, p_status: 'gehaald',
+                })), 'Afgetekend');
+                render();
+              },
+            }, 'Zet op gehaald'),
+            el('span', { class: 'dim' }, 'Komt in de aftekenlijst te staan, met een notitie dat het uit dit examen komt.')));
+        },
+      }, 'Aftekenen')));
+    wrap.append(aftekenen);
+  }
 
   // Koppelen aan een vaarder, zodat je later weet wie deze Anouk was. Aftekenen
   // blijft handwerk: een fout in een vraag hoort niet vanzelf in een
