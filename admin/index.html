@@ -66,6 +66,11 @@
   }
   button.chip { border: 0; cursor: pointer; font-family: inherit; padding: 5px 12px; }
   button.chip.on { background: var(--accent); color: var(--on-accent); }
+  .voortgang {
+    height: 8px; border-radius: 4px; background: var(--chip); overflow: hidden;
+    margin-top: 10px;
+  }
+  .voortgang > i { display: block; height: 100%; background: var(--accent); transition: width .2s; }
   .keuzeregel {
     display: flex; justify-content: space-between; gap: 12px; width: 100%;
     text-align: left; font: inherit; cursor: pointer; padding: 10px 12px;
@@ -1216,37 +1221,64 @@ function importBlok() {
     'Het examen, de vragen, de antwoorden en de plaatjes komen er in één keer in.'));
 
   const kiezer = el('input', { type: 'file', accept: '.json,application/json' });
+
+  // Inlezen duurt even — 35 vragen, 19 plaatjes — dus laat zien hoever hij is.
+  // De balk en de regel eronder blijven staan als hij klaar is; pas als jij op
+  // "Vernieuwen" klikt wordt het scherm opnieuw getekend.
+  const balk = el('div', { class: 'voortgang hidden' }, el('i', { style: 'width:0%' }));
   const stand = el('div', { class: 'dim', style: 'margin-top:8px' });
+  const knop = el('button', { class: 'btn' }, 'Inlezen');
 
-  doos.append(el('div', { class: 'row' }, kiezer,
-    el('button', {
-      class: 'btn',
-      onclick: async () => {
-        const bestand = kiezer.files?.[0];
-        if (!bestand) return;
+  const meld = async (tekst, deel) => {
+    stand.textContent = tekst;
+    if (typeof deel === 'number') {
+      balk.classList.remove('hidden');
+      balk.firstChild.style.width = `${Math.round(deel * 100)}%`;
+    }
+    // Eén tel wachten zodat de browser de nieuwe stand ook echt tekent voordat
+    // het volgende verzoek de lijn bezet houdt.
+    await new Promise((klaar) => requestAnimationFrame(() => setTimeout(klaar, 0)));
+  };
 
-        let data;
-        try {
-          data = JSON.parse(await bestand.text());
-        } catch {
-          stand.textContent = 'Dat bestand is geen geldig importbestand.';
-          return;
-        }
-        if (!data?.vragen?.length) {
-          stand.textContent = 'Er staan geen vragen in dat bestand.';
-          return;
-        }
+  knop.addEventListener('click', async () => {
+    const bestand = kiezer.files?.[0];
+    if (!bestand) {
+      stand.textContent = 'Kies eerst een bestand.';
+      return;
+    }
 
-        await lezenIn(data, (tekst) => { stand.textContent = tekst; });
-      },
-    }, 'Inlezen')));
+    let data;
+    try {
+      data = JSON.parse(await bestand.text());
+    } catch {
+      stand.textContent = 'Dat bestand is geen geldig importbestand.';
+      return;
+    }
+    if (!data?.vragen?.length) {
+      stand.textContent = 'Er staan geen vragen in dat bestand.';
+      return;
+    }
 
-  doos.append(stand);
+    knop.disabled = true;
+    try {
+      const klaar = await lezenIn(data, meld);
+      await meld(`Klaar: ${klaar.vragen} vragen, ${klaar.plaatjes} plaatjes.`, 1);
+      doos.append(el('div', { class: 'row', style: 'margin-top:10px' },
+        el('button', { class: 'btn', onclick: () => render() }, 'Vernieuwen')));
+    } catch (e) {
+      await meld(`Het inlezen stopte: ${message(e)}`);
+    } finally {
+      knop.disabled = false;
+    }
+  });
+
+  doos.append(el('div', { class: 'row' }, kiezer, knop));
+  doos.append(balk, stand);
   return doos;
 }
 
 async function lezenIn(data, meld) {
-  meld('Examen aanmaken…');
+  await meld(`${data.titel ?? 'Examen'} aanmaken…`, 0.05);
 
   const examen = check(await db.from('exams').insert({
     group_id: group.id,
@@ -1258,7 +1290,7 @@ async function lezenIn(data, meld) {
 
   // Vragen en antwoorden in één keer per soort: 35 losse verzoeken duren op een
   // trage verbinding in het clubhuis ongemakkelijk lang.
-  meld(`${data.vragen.length} vragen toevoegen…`);
+  await meld(`${data.vragen.length} vragen toevoegen…`, 0.15);
   const vragen = check(await db.from('exam_questions').insert(
     data.vragen.map((v, i) => ({
       exam_id: examId,
@@ -1283,6 +1315,7 @@ async function lezenIn(data, meld) {
       });
     });
   }
+  await meld(`${opties.length} antwoorden toevoegen…`, 0.3);
   check(await db.from('exam_options').insert(opties));
 
   // De plaatjes. Eén voor één, zodat je ziet hoever hij is en een mislukte
@@ -1292,7 +1325,9 @@ async function lezenIn(data, meld) {
   for (const v of metPlaatje) {
     const vraag = vragen.find((q) => q.position === v.nummer);
     if (!vraag) continue;
-    meld(`Plaatjes uploaden… ${++gedaan} van ${metPlaatje.length}`);
+    gedaan++;
+    await meld(`Plaatje ${gedaan} van ${metPlaatje.length} uploaden…`,
+      0.4 + 0.6 * (gedaan / Math.max(1, metPlaatje.length)));
 
     const bytes = Uint8Array.from(atob(v.plaatje.base64), (c) => c.charCodeAt(0));
     const pad = `${examId}/${vraag.id}.png`;
@@ -1300,14 +1335,14 @@ async function lezenIn(data, meld) {
       upsert: true, contentType: 'image/png',
     });
     if (op.error) {
-      meld(`Plaatje bij vraag ${v.nummer} lukte niet: ${op.error.message}`);
+      await meld(`Plaatje bij vraag ${v.nummer} lukte niet: ${op.error.message}`);
       continue;
     }
     check(await db.from('exam_questions').update({ image_path: pad }).eq('id', vraag.id));
   }
 
   say(`${data.titel} staat erin: ${vragen.length} vragen, ${gedaan} plaatjes.`, 'ok');
-  render();
+  return { vragen: vragen.length, plaatjes: gedaan };
 }
 
 function examenBlock(ex, diplomas) {
