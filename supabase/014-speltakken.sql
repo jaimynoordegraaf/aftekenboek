@@ -1,4 +1,4 @@
--- aftekenboek — speltakken die ook echt ergens aan hangen
+-- vinkje — speltakken die ook echt ergens aan hangen
 --
 -- De tabellen stonden er vanaf het begin, meegekomen uit het fundament van de
 -- groepsapp, maar er was geen enkele manier om iemand in een speltak te zetten.

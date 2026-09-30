@@ -1,4 +1,4 @@
--- aftekenboek — row level security
+-- vinkje — row level security
 --
 -- Two rules run through all of it:
 --

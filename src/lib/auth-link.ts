@@ -5,6 +5,14 @@
  *
  *     aftekenboek://wachtwoord#access_token=…&refresh_token=…&type=recovery
  *
+ * Het schema heet nog `aftekenboek`, niet `vinkje`. De app registreert er sinds
+ * de naamswijziging twee, zodat `vinkje://` ook opengaat, maar `aftekenboek://`
+ * blijft de eerste en dus wat `Linking.createURL` maakt. Omzetten kan pas als
+ * Supabase `vinkje://*` in de redirect-allowlist heeft staan én er een nieuwe
+ * native build uitstaat die dat schema kent — draai je de volgorde eerder om,
+ * dan wijst een herstelmail naar een schema dat de geïnstalleerde app niet kent
+ * en gaat er niets open.
+ *
  * met de sleutels achter de `#`, omdat dit project de "implicit" flow gebruikt.
  * Met de PKCE-flow zou er `?code=…` staan; die wordt ook herkend, zodat een
  * instellingswijziging bij Supabase dit niet stilletjes breekt. En een

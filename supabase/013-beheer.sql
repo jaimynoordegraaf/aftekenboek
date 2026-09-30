@@ -1,4 +1,4 @@
--- aftekenboek — iemand uit de groep halen, en de catalogus bewerkbaar maken
+-- vinkje — iemand uit de groep halen, en de catalogus bewerkbaar maken
 --
 -- Twee dingen die tot nu toe alleen via de SQL Editor konden.
 --

@@ -1,4 +1,4 @@
--- aftekenboek — een groep raakt zijn laatste beheerder niet kwijt
+-- vinkje — een groep raakt zijn laatste beheerder niet kwijt
 --
 -- Het rollenscherm liet een beheerder zichzelf met één tik lid maken. Daarna
 -- kan diezelfde persoon niets meer beheren — ook niet zijn eigen rol

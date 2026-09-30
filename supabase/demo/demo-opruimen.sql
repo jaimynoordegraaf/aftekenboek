@@ -1,4 +1,4 @@
--- aftekenboek — de demogroep voor de screenshots weer weghalen
+-- vinkje — de demogroep voor de screenshots weer weghalen
 --
 -- Haalt de groep "Scouting De Waterlanders" weg, met de verzonnen mensen die
 -- erin zaten. Jouw eigen account blijft, net als je echte groep.

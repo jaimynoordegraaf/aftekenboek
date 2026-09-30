@@ -1,4 +1,4 @@
--- aftekenboek — the calls the app makes that policies alone cannot express
+-- vinkje — the calls the app makes that policies alone cannot express
 --
 -- Every function here is `security definer`, which means it runs with the
 -- rights of its owner and RLS does not apply inside it. So each one checks

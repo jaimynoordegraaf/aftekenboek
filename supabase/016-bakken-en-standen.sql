@@ -1,4 +1,4 @@
--- aftekenboek — bakken, en aftekenen in drie standen
+-- vinkje — bakken, en aftekenen in drie standen
 --
 -- Twee dingen die bij elkaar horen, omdat ze samen het overzicht op het water
 -- mogelijk maken: één onderdeel kiezen, één bak kiezen, en voor iedereen in die

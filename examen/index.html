@@ -114,7 +114,7 @@
 // Wat hier wel ligt, ligt in localStorage: welke deelname bij deze code hoort.
 // Anders is een per ongeluk ververste pagina een kwijtgeraakt examen.
 
-const cfg = window.AFTEKENBOEK ?? { url: '', key: '' };
+const cfg = window.VINKJE ?? { url: '', key: '' };
 const db = cfg.url && cfg.key ? window.supabase.createClient(cfg.url, cfg.key, {
   auth: { persistSession: false },
 }) : null;

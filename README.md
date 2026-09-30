@@ -1,9 +1,15 @@
 # Vinkje
 
-*Heette tot september 2026 Aftekenboek.* Achter de schermen heet hij nog steeds
-zo: de map, het Expo-project, de app-id `com.scoutingjwf.aftekenboek` en het
-linkschema `aftekenboek://`. Die liggen vast bij Apple en Google of staan in al
-verstuurde mails, en niemand ziet ze. Alleen de naam die mensen lezen is Vinkje.
+*Heette tot september 2026 Aftekenboek.* Eén ding houdt die naam voorgoed: de
+app-id `com.scoutingjwf.aftekenboek`. Apple en Google leggen die bij de eerste
+publicatie vast en een andere id is voor hen een andere app — nieuwe installaties,
+nieuwe beoordelingen, en de mensen die de app al hebben krijgen nooit meer een
+update. Dus die blijft, en niemand ziet hem.
+
+Het linkschema is halverwege: de app registreert `aftekenboek://` en `vinkje://`
+allebei, met de oude nog als eerste. Die volgorde omdraaien kan pas als Supabase
+`vinkje://*` in de redirect-allowlist heeft staan en er een native build uitstaat
+die het nieuwe schema kent — zie `src/lib/auth-link.ts`.
 
 De vorderingenstaat voor de Watersport Academy-diploma's van een Scoutinggroep,
 als app voor iOS en Android. Een instructeur tekent op de steiger per eis af;

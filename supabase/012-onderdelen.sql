@@ -1,4 +1,4 @@
--- aftekenboek — losse onderdelen binnen één eis
+-- vinkje — losse onderdelen binnen één eis
 --
 -- "Schiemanswerk" is één regel op de vorderingenstaat, maar er zitten zes
 -- knopen achter. Met één vinkje is niet bij te houden wie de paalsteek al kan

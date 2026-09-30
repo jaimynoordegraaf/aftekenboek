@@ -1,4 +1,4 @@
--- aftekenboek — een demogroep voor de screenshots in de App Store en Play Store
+-- vinkje — een demogroep voor de screenshots in de App Store en Play Store
 --
 -- Screenshots van de echte groep zetten namen van echte kinderen in een
 -- openbare winkel. Deze groep bestaat uit verzonnen vaarders, een verzonnen

@@ -1,4 +1,4 @@
--- aftekenboek — core schema
+-- vinkje — core schema
 --
 -- Three layers, and they are deliberately separate:
 --

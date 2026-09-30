@@ -20,7 +20,27 @@ import {
   type Section,
 } from './types';
 
-const ACTIVE_GROUP_KEY = 'aftekenboek:active-group';
+const ACTIVE_GROUP_KEY = 'vinkje:active-group';
+
+/**
+ * De sleutel heette tot de naamswijziging `aftekenboek:active-group`. Wie de app
+ * al had staan, heeft zijn groep daar nog liggen: zonder deze terugval zou hij na
+ * het bijwerken ineens in de eerste groep uit de lijst kijken in plaats van in die
+ * van hemzelf. Eén keer overzetten en de oude weggooien.
+ */
+const OUDE_ACTIVE_GROUP_KEY = 'aftekenboek:active-group';
+
+async function leesActieveGroep() {
+  const nieuwe = await AsyncStorage.getItem(ACTIVE_GROUP_KEY);
+  if (nieuwe !== null) return nieuwe;
+
+  const oude = await AsyncStorage.getItem(OUDE_ACTIVE_GROUP_KEY);
+  if (oude !== null) {
+    await AsyncStorage.setItem(ACTIVE_GROUP_KEY, oude);
+    await AsyncStorage.removeItem(OUDE_ACTIVE_GROUP_KEY);
+  }
+  return oude;
+}
 
 type State = {
   /** False until the stored session has been read; the UI waits on this. */
@@ -106,7 +126,7 @@ export const useSession = create<State & Actions>((set, get) => ({
       const profile = await fetchProfile(userId);
 
       // Keep the groep they were last looking at, if they are still in it.
-      const stored = await AsyncStorage.getItem(ACTIVE_GROUP_KEY);
+      const stored = await leesActieveGroep();
       const active =
         memberships.find((m) => m.group_id === stored)?.group_id ??
         memberships[0]?.group_id ??
@@ -127,7 +147,7 @@ export const useSession = create<State & Actions>((set, get) => ({
 
   async signOut(scope) {
     await supabase?.auth.signOut(scope ? { scope } : undefined);
-    await AsyncStorage.removeItem(ACTIVE_GROUP_KEY);
+    await AsyncStorage.multiRemove([ACTIVE_GROUP_KEY, OUDE_ACTIVE_GROUP_KEY]);
     set({
       userId: null,
       email: null,

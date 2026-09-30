@@ -60,7 +60,7 @@ const server = createServer(async (req, res) => {
       env?.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? env?.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
     res.writeHead(200, { 'content-type': TYPES['.js'], 'cache-control': 'no-store' });
-    res.end(`window.AFTEKENBOEK = ${JSON.stringify({ url, key })};\n`);
+    res.end(`window.VINKJE = ${JSON.stringify({ url, key })};\n`);
     return;
   }
 

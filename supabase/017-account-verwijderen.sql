@@ -1,4 +1,4 @@
--- aftekenboek — je eigen account verwijderen, vanuit de app
+-- vinkje — je eigen account verwijderen, vanuit de app
 --
 -- Google en Apple eisen allebei dat wie in een app een account kan maken, dat
 -- account ook in de app kan laten verwijderen. Dit is de functie achter die

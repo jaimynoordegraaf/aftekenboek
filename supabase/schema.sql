@@ -1,4 +1,4 @@
--- aftekenboek — het hele schema in één bestand.
+-- vinkje — het hele schema in één bestand.
 --
 -- Voor een nieuw Supabase-project: alles in één keer plakken. Draai op een
 -- bestaand project de losse genummerde bestanden.
@@ -10,7 +10,7 @@
 
 -- ============================================================ 001-core.sql
 
--- aftekenboek — core schema
+-- vinkje — core schema
 --
 -- Three layers, and they are deliberately separate:
 --
@@ -298,7 +298,7 @@ create trigger on_auth_user_created
 
 -- ============================================================ 002-rls.sql
 
--- aftekenboek — row level security
+-- vinkje — row level security
 --
 -- Two rules run through all of it:
 --
@@ -441,7 +441,7 @@ create policy sign_offs_staff_delete on sign_offs
 
 -- ============================================================ 003-rpc.sql
 
--- aftekenboek — the calls the app makes that policies alone cannot express
+-- vinkje — the calls the app makes that policies alone cannot express
 --
 -- Every function here is `security definer`, which means it runs with the
 -- rights of its owner and RLS does not apply inside it. So each one checks
@@ -700,7 +700,7 @@ $fn$;
 
 -- ============================================================ 011-laatste-beheerder.sql
 
--- aftekenboek — een groep raakt zijn laatste beheerder niet kwijt
+-- vinkje — een groep raakt zijn laatste beheerder niet kwijt
 --
 -- Het rollenscherm liet een beheerder zichzelf met één tik lid maken. Daarna
 -- kan diezelfde persoon niets meer beheren — ook niet zijn eigen rol
@@ -752,7 +752,7 @@ create trigger memberships_keep_one_beheerder
 
 -- ============================================================ 012-onderdelen.sql
 
--- aftekenboek — losse onderdelen binnen één eis
+-- vinkje — losse onderdelen binnen één eis
 --
 -- "Schiemanswerk" is één regel op de vorderingenstaat, maar er zitten zes
 -- knopen achter. Met één vinkje is niet bij te houden wie de paalsteek al kan
@@ -924,7 +924,7 @@ $fn$;
 
 -- ============================================================ 013-beheer.sql
 
--- aftekenboek — iemand uit de groep halen, en de catalogus bewerkbaar maken
+-- vinkje — iemand uit de groep halen, en de catalogus bewerkbaar maken
 --
 -- Twee dingen die tot nu toe alleen via de SQL Editor konden.
 --
@@ -1037,7 +1037,7 @@ $fn$;
 
 -- ============================================================ 014-speltakken.sql
 
--- aftekenboek — speltakken die ook echt ergens aan hangen
+-- vinkje — speltakken die ook echt ergens aan hangen
 --
 -- De tabellen stonden er vanaf het begin, meegekomen uit het fundament van de
 -- groepsapp, maar er was geen enkele manier om iemand in een speltak te zetten.
@@ -1149,7 +1149,7 @@ $fn$;
 
 -- ============================================================ 015-leden-zonder-account.sql
 
--- aftekenboek — leden die geen account hebben
+-- vinkje — leden die geen account hebben
 --
 -- Tot nu toe was een lid hetzelfde als een account: profiles.id verwees naar
 -- auth.users, dus je kon alleen in het register staan als je je had aangemeld.
@@ -1243,7 +1243,7 @@ $fn$;
 
 -- ============================================================ 016-bakken-en-standen.sql
 
--- aftekenboek — bakken, en aftekenen in drie standen
+-- vinkje — bakken, en aftekenen in drie standen
 --
 -- Twee dingen die bij elkaar horen, omdat ze samen het overzicht op het water
 -- mogelijk maken: één onderdeel kiezen, één bak kiezen, en voor iedereen in die
@@ -1599,7 +1599,7 @@ $fn$;
 
 -- ============================================================ 017-account-verwijderen.sql
 
--- aftekenboek — je eigen account verwijderen, vanuit de app
+-- vinkje — je eigen account verwijderen, vanuit de app
 --
 -- Google en Apple eisen allebei dat wie in een app een account kan maken, dat
 -- account ook in de app kan laten verwijderen. Dit is de functie achter die
@@ -3127,7 +3127,7 @@ $fn$;
 
 -- ============================================================ 010-eisen.sql
 
--- aftekenboek — de diploma's en hun eisen
+-- vinkje — de diploma's en hun eisen
 --
 -- This file is the catalogue. It is written to be run again, as often as you
 -- like: every row upserts on its `code`, so ids stay the same and aftekeningen

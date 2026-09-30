@@ -68,7 +68,7 @@ await writeFile(
 await writeFile(
   join(out, 'config.js'),
   `// Gegenereerd door ${pagina === 'examen' ? 'npm run examen:build' : 'npm run admin:build'} — niet met de hand bijwerken.\n` +
-    `window.AFTEKENBOEK = ${JSON.stringify({ url, key }, null, 2)};\n`,
+    `window.VINKJE = ${JSON.stringify({ url, key }, null, 2)};\n`,
 );
 
 // De meeste WordPress-hosts draaien Apache. Geen mapinhoud tonen, het

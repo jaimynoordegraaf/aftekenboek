@@ -1,4 +1,4 @@
--- aftekenboek — de diploma's en hun eisen
+-- vinkje — de diploma's en hun eisen
 --
 -- This file is the catalogue. It is written to be run again, as often as you
 -- like: every row upserts on its `code`, so ids stay the same and aftekeningen

@@ -1,4 +1,4 @@
--- aftekenboek — leden die geen account hebben
+-- vinkje — leden die geen account hebben
 --
 -- Tot nu toe was een lid hetzelfde als een account: profiles.id verwees naar
 -- auth.users, dus je kon alleen in het register staan als je je had aangemeld.
