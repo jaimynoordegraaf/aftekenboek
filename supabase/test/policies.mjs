@@ -101,6 +101,7 @@ async function main() {
     '022-examen-aftekenen.sql',
     '023-examen-afbeeldingen.sql',
     '024-examen-geslaagd.sql',
+    '025-examen-opruimen.sql',
     '010-eisen.sql',
   ]) {
     try {
@@ -1376,6 +1377,35 @@ async function main() {
     [mee.attempt_id, [roeienEis.id]],
   );
   check('een andere groep kan hier niet aftekenen', doorVreemdeHand !== null, 'het lukte wel');
+
+  // Opruimen: de antwoorden weg, de uitslag blijft. Dat is wat het
+  // privacybeleid belooft.
+  const morgen = new Date(Date.now() + 864e5).toISOString().slice(0, 10);
+  const vooraf = await as(kamp, () =>
+    one(`select * from exam_cleanup_preview($1, $2::date)`, [jwf, morgen]),
+  );
+  check('vooraf zie je hoeveel er weggaat',
+    Number(vooraf.antwoorden) >= 2 && Number(vooraf.deelnames) === 2,
+    `${vooraf.antwoorden} antwoorden, ${vooraf.deelnames} deelnames`);
+
+  const doorInstructeur = await refused(kamp, `select exam_cleanup($1, $2::date)`, [jwf, morgen]);
+  check('een instructeur mag niet wissen', doorInstructeur !== null, 'het lukte wel');
+
+  const gewist = (
+    await as(sam, () => db.query(`select exam_cleanup($1, $2::date) as n`, [jwf, morgen]))
+  ).rows[0].n;
+  check('een beheerder wel', Number(gewist) >= 2, String(gewist));
+
+  const naOpruimen = await one(
+    `select
+       (select count(*)::int from exam_answers x
+        join exam_attempts a on a.id = x.attempt_id where a.session_id = '${sessie.session_id}') as antwoorden,
+       (select count(*)::int from exam_attempts where session_id = '${sessie.session_id}') as deelnames,
+       (select score from exam_attempts where id = '${mee.attempt_id}') as score`,
+  );
+  check('de antwoorden zijn weg', naOpruimen.antwoorden === 0, `${naOpruimen.antwoorden}`);
+  check('de deelnames blijven staan', naOpruimen.deelnames === 2, `${naOpruimen.deelnames}`);
+  check('met hun uitslag', Number(naOpruimen.score) === 1, String(naOpruimen.score));
 
   // Sluiten is een slot, geen verzoek.
   await as(kamp, () => db.query(`select close_exam_session($1)`, [sessie.session_id]));

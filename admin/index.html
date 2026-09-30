@@ -1231,6 +1231,7 @@ async function renderExamens(view) {
 
   view.append(doos);
   view.append(importBlok());
+  view.append(opruimBlok());
 }
 
 /**
@@ -1245,6 +1246,71 @@ async function renderExamens(view) {
  * mag dat. Een script met een sleutel dat buiten de browser draait zou die
  * regel omzeilen, en dan staat die sleutel ergens in een bestand.
  */
+/**
+ * Examenantwoorden opruimen.
+ *
+ * Het privacybeleid zegt dat de gegeven antwoorden na afloop van het seizoen
+ * weggaan en dat alleen de uitslag blijft. Dit is de knop die dat waarmaakt.
+ *
+ * Eerst tellen, dan pas wissen: je ziet hoeveel deelnames en antwoorden het
+ * raakt voordat er iets verdwijnt. Wissen kan niet ongedaan gemaakt worden en
+ * mag daarom alleen door een beheerder.
+ */
+function opruimBlok() {
+  const doos = el('div', { class: 'card' });
+  doos.append(el('h3', {}, 'Antwoorden opruimen'));
+  doos.append(el('p', { class: 'dim' },
+    'Van examens die vóór deze datum zijn afgenomen gaan de gegeven antwoorden weg. ' +
+    'De uitslag blijft staan: naam, score en of het gehaald is. Dit kan niet ongedaan gemaakt worden.'));
+
+  // Standaard 1 september van dit jaar: het begin van het seizoen, dus alles
+  // van vorig seizoen valt eronder.
+  const nu = new Date();
+  const standaard = `${nu.getFullYear() - (nu.getMonth() < 8 ? 1 : 0)}-09-01`;
+
+  const datum = field('Alles van vóór', standaard, {});
+  datum.input.type = 'date';
+  const stand = el('div', { class: 'dim', style: 'margin-top:8px' });
+
+  const tellen = async () => {
+    stand.textContent = 'Tellen…';
+    const rijen = await run(async () => check(await db.rpc('exam_cleanup_preview', {
+      p_group: group.id, p_voor: datum.input.value,
+    })));
+    const r = rijen?.[0];
+    if (!r || Number(r.antwoorden) === 0) {
+      stand.textContent = 'Er staat niets van vóór die datum.';
+      return null;
+    }
+    stand.textContent =
+      `${r.antwoorden} antwoorden van ${r.deelnames} deelnames, uit ${r.sessies} sessies.`;
+    return r;
+  };
+
+  doos.append(el('div', { class: 'row' }, datum.wrap,
+    el('button', { class: 'btn ghost', onclick: () => tellen() }, 'Tellen'),
+    el('button', {
+      class: 'btn danger',
+      onclick: async () => {
+        const r = await tellen();
+        if (!r) return;
+        if (!confirmed(
+          `${r.antwoorden} antwoorden wissen?\n\n` +
+          `Van ${r.deelnames} deelnames uit ${r.sessies} sessies, afgenomen vóór ${datum.input.value}. ` +
+          'De uitslagen blijven staan. Dit kun je niet terugdraaien.',
+        )) return;
+
+        const weg = await run(async () => check(await db.rpc('exam_cleanup', {
+          p_group: group.id, p_voor: datum.input.value,
+        })), 'Opgeruimd');
+        stand.textContent = `${weg} antwoorden gewist. De uitslagen staan er nog.`;
+      },
+    }, 'Wissen')));
+
+  doos.append(stand);
+  return doos;
+}
+
 function importBlok() {
   const doos = el('div', { class: 'card' });
   doos.append(el('h3', {}, 'Examen inlezen'));

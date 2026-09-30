@@ -65,6 +65,8 @@ project dat al bestaat:
                               iedereen mag lezen, alleen instructeurs uploaden
     024-examen-geslaagd.sql   het deelnemersoverzicht zegt erbij of iemand
                               geslaagd is, met het percentage en de grens
+    025-examen-opruimen.sql   gegeven antwoorden van oude examens wissen; de
+                              uitslag blijft. Alleen een beheerder
 
 `010-eisen.sql` draait **als laatste**, ook al is zijn nummer lager. De catalogus
 hangt aan elke schemawijziging die erna genummerd is, dus hij wordt steeds
