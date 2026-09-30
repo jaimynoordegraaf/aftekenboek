@@ -95,6 +95,7 @@ async function main() {
     '016-bakken-en-standen.sql',
     '017-account-verwijderen.sql',
     '018-eigen-lijsten.sql',
+    '019-examens.sql',
     '010-eisen.sql',
   ]) {
     try {
@@ -1085,6 +1086,172 @@ async function main() {
     `select count(*)::int as n from requirements where diploma_id = '${insigne}'`,
   );
   check('en zijn eisen gaan mee', eisenWeg.n === 0, `${eisenWeg.n}`);
+
+  section('Examens');
+
+  // Een examen van twee vragen. De instructeur maakt het op de gewone manier:
+  // via de tabellen, want daar mag hij bij.
+  const examen = (
+    await as(kamp, () =>
+      db.query(
+        `insert into exams (group_id, title, intro, pass_percent, shuffle, created_by)
+         values ($1, 'Theorie Roeien', 'Tien minuten, geen boekje', 60, false, $2) returning id`,
+        [jwf, kamp],
+      ),
+    )
+  ).rows[0].id;
+
+  const vraag = {};
+  for (const [nr, tekst, goed, fout] of [
+    [1, 'Welke kant is stuurboord?', 'Rechts', 'Links'],
+    [2, 'Wat betekent oploeven?', 'Meer naar de wind toe', 'Van de wind af'],
+  ]) {
+    vraag[nr] = (
+      await as(kamp, () =>
+        db.query(
+          `insert into exam_questions (exam_id, position, prompt) values ($1, $2, $3) returning id`,
+          [examen, nr, tekst],
+        ),
+      )
+    ).rows[0].id;
+    await as(kamp, () =>
+      db.query(
+        `insert into exam_options (question_id, position, label, correct)
+         values ($1, 1, $2, true), ($1, 2, $3, false)`,
+        [vraag[nr], goed, fout],
+      ),
+    );
+  }
+
+  // Een lid van de groep mag de vragen niet zien; anders is er geen examen meer.
+  const vragenVoorLid = await as(vaarder, () =>
+    one(`select count(*)::int as n from exam_questions where exam_id = '${examen}'`),
+  );
+  check('een lid ziet de vragen niet', vragenVoorLid.n === 0, `${vragenVoorLid.n}`);
+  const vragenVoorVreemde = await as(ander, () =>
+    one(`select count(*)::int as n from exam_questions`),
+  );
+  check('een andere groep ook niet', vragenVoorVreemde.n === 0, `${vragenVoorVreemde.n}`);
+  const antwoordenZonderLogin = await as('', () =>
+    one(`select count(*)::int as n from exam_options`),
+  );
+  check('en zonder inloggen al helemaal niet', antwoordenZonderLogin.n === 0,
+    `${antwoordenZonderLogin.n}`);
+
+  // Afnemen: een sessie met een code.
+  const sessie = (
+    await as(kamp, () => db.query(`select * from open_exam_session($1, 'Herfstkamp')`, [examen]))
+  ).rows[0];
+  check('een sessie krijgt een code van zes tekens', /^[A-Z2-9]{6}$/.test(sessie.code),
+    sessie.code);
+
+  const doorVreemde = await refused(ander, `select * from open_exam_session($1)`, [examen]);
+  check('een andere groep kan er geen sessie van openen', doorVreemde !== null, 'het lukte wel');
+
+  // Meedoen zonder account: alleen de code en een naam.
+  const mee = (
+    await as('', () => db.query(`select * from exam_join($1, 'Anouk Bakker')`, [sessie.code]))
+  ).rows[0];
+  check('meedoen met de code, zonder inloggen', !!mee.attempt_id, String(mee.attempt_id));
+  check('en je krijgt de vragen', mee.questions.length === 2, `${mee.questions.length}`);
+
+  const lek = JSON.stringify(mee.questions);
+  check('zonder het juiste antwoord erbij', !/correct/i.test(lek), lek.slice(0, 80));
+
+  const fouteCode = await refused('', `select * from exam_join('XXXXXX', 'Iemand')`);
+  check('een code die niet bestaat doet niets', fouteCode !== null, 'het lukte wel');
+  const zonderNaam = await refused('', `select * from exam_join($1, ' ')`, [sessie.code]);
+  check('en zonder naam kom je er niet in', zonderNaam !== null, 'het lukte wel');
+
+  // Antwoorden. Het goede antwoord van vraag 1, het foute van vraag 2.
+  const goed1 = await one(
+    `select id from exam_options where question_id = '${vraag[1]}' and correct`,
+  );
+  const fout2 = await one(
+    `select id from exam_options where question_id = '${vraag[2]}' and not correct`,
+  );
+  const geantwoord = await refused(
+    '',
+    `select exam_answer($1, $2, $3, $4)`,
+    [mee.attempt_id, mee.token, vraag[1], goed1.id],
+  );
+  check('een antwoord opslaan', geantwoord === null, geantwoord ?? '');
+  await as('', () =>
+    db.query(`select exam_answer($1, $2, $3, $4)`, [mee.attempt_id, mee.token, vraag[2], fout2.id]),
+  );
+
+  // Het token is het enige dat een deelname beschermt.
+  const metVerzonnenToken = await refused(
+    '',
+    `select exam_answer($1, gen_random_uuid(), $2, $3)`,
+    [mee.attempt_id, vraag[1], goed1.id],
+  );
+  check('met een verzonnen token kom je er niet bij', metVerzonnenToken !== null, 'het lukte wel');
+
+  // Een tweede deelnemer mag niet bij het werk van de eerste.
+  const mee2 = (
+    await as('', () => db.query(`select * from exam_join($1, 'Daan Visser')`, [sessie.code]))
+  ).rows[0];
+  const bijEenAnder = await refused('', `select * from exam_result($1, $2)`, [
+    mee.attempt_id,
+    mee2.token,
+  ]);
+  check('en niet bij de deelname van een ander', bijEenAnder !== null, 'het lukte wel');
+
+  // Nakijken gebeurt op de server.
+  const uitslag = (
+    await as('', () => db.query(`select * from exam_submit($1, $2)`, [mee.attempt_id, mee.token]))
+  ).rows[0];
+  check('inleveren geeft de score', uitslag.score === 1 && uitslag.total === 2,
+    `${uitslag.score} van ${uitslag.total}`);
+  check('en zegt of het gehaald is', uitslag.passed === false, String(uitslag.passed));
+
+  const naInleveren = await refused('', `select exam_answer($1, $2, $3, $4)`, [
+    mee.attempt_id,
+    mee.token,
+    vraag[2],
+    fout2.id,
+  ]);
+  check('na inleveren kan er niets meer bij', naInleveren !== null, 'het lukte wel');
+
+  // Meekijken hoort bij de groep, en bij niemand anders.
+  const overzicht = await as(kamp, async () =>
+    (await db.query(`select * from exam_session_overview($1)`, [sessie.session_id])).rows,
+  );
+  check('de instructeur ziet beide deelnemers', overzicht.length === 2, `${overzicht.length}`);
+  check('met hun namen', overzicht[0].display_name === 'Anouk Bakker',
+    overzicht[0].display_name);
+  const overzichtVreemde = await as(ander, async () =>
+    (await db.query(`select * from exam_session_overview($1)`, [sessie.session_id])).rows,
+  );
+  check('een andere groep ziet niets', overzichtVreemde.length === 0,
+    `${overzichtVreemde.length}`);
+
+  const detail = await as(kamp, async () =>
+    (await db.query(`select * from exam_attempt_detail($1)`, [mee.attempt_id])).rows,
+  );
+  check('en kan de antwoorden nakijken', detail.length === 2 && detail[0].correct === true,
+    JSON.stringify(detail.map((d) => d.correct)));
+
+  // Sluiten is een slot, geen verzoek.
+  await as(kamp, () => db.query(`select close_exam_session($1)`, [sessie.session_id]));
+  const naSluiten = await refused('', `select exam_answer($1, $2, $3, $4)`, [
+    mee2.attempt_id,
+    mee2.token,
+    vraag[1],
+    goed1.id,
+  ]);
+  check('een gesloten sessie neemt niets meer aan', naSluiten !== null, 'het lukte wel');
+  const meedoenNaSluiten = await refused('', `select * from exam_join($1, 'Te laat')`, [
+    sessie.code,
+  ]);
+  check('en laat niemand meer binnen', meedoenNaSluiten !== null, 'het lukte wel');
+
+  // Een sessie die niemand sluit, sluit zichzelf.
+  await db.exec(`update exam_sessions set status = 'open', closes_at = now() - interval '1 minute'
+                 where id = '${sessie.session_id}'`);
+  const verlopen = await refused('', `select * from exam_join($1, 'Te laat')`, [sessie.code]);
+  check('een sessie die over zijn tijd is ook niet', verlopen !== null, 'het lukte wel');
 
   report();
   process.exit(failures === 0 ? 0 : 1);

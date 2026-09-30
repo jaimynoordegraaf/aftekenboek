@@ -51,6 +51,8 @@ project dat al bestaat:
                               je eigen account verwijderen vanuit de app
     018-eigen-lijsten.sql     eigen eisenlijsten naast de landelijke catalogus;
                               landelijk wordt weer alleen-lezen
+    019-examens.sql           examens maken, afnemen met een sessiecode en
+                              meekijken; deelnemers hebben geen account
 
 `010-eisen.sql` draait **als laatste**, ook al is zijn nummer lager. De catalogus
 hangt aan elke schemawijziging die erna genummerd is, dus hij wordt steeds
