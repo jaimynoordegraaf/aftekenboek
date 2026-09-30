@@ -1,6 +1,6 @@
 # Privacybeleid Vinkje
 
-*Laatst bijgewerkt: 22 september 2026*
+*Laatst bijgewerkt: 30 september 2026*
 
 Vinkje is een app waarmee instructeurs van Scouting Jan Willem Friso bijhouden
 hoe ver vaarders zijn met hun watersportdiploma's. In dit privacybeleid staat welke
@@ -35,6 +35,18 @@ in de app. Van hen gebruiken we geen e-mailadres en geen andere contactgegevens.
 - hun rol in de groep (instructeur of beheerder);
 - welke aftekeningen zij hebben gezet.
 
+**Van wie een theorie-examen invult:**
+
+- de naam die hij zelf intypt;
+- de gegeven antwoorden, en per antwoord of het goed was;
+- de uitslag: het aantal punten en of het examen gehaald is;
+- wanneer hij begon en wanneer hij inleverde.
+
+Een examen vul je in op een webpagina met een code die de instructeur voorleest. Daar
+is geen account voor nodig en er wordt niet ingelogd: alleen die naam en de antwoorden
+gaan mee. Een instructeur kan een deelname daarna koppelen aan een vaarder in de groep,
+zodat de uitslag bij de juiste persoon hoort.
+
 **Technische gegevens:**
 
 - Om je ingelogd te houden, bewaart de app een inlogsleutel op je eigen telefoon.
@@ -56,6 +68,9 @@ geen trackers, en verkoopt of deelt geen gegevens voor marketing.
   voordat die meer zelfstandig mag varen.
 - **Om het account van instructeurs en beheerders te laten werken**: inloggen, een
   wachtwoord herstellen en een bevestigingsmail sturen.
+- **Om theorie-examens af te nemen en na te kijken.** Het nakijken gebeurt op de
+  server, zodat het juiste antwoord niet op de telefoon van de deelnemer staat. De
+  instructeur bespreekt de uitslag na en bepaalt zelf of een eis wordt afgetekend.
 
 We doen dit op grond van het gerechtvaardigd belang van de groep bij een zorgvuldige
 en veilige watersportopleiding, als onderdeel van het lidmaatschap. Voor instructeurs
@@ -66,6 +81,9 @@ en beheerders is het account ook nodig om de app te kunnen gebruiken.
 - **Instructeurs en beheerders van de groep** zien de voortgang van alle vaarders in
   de groep.
 - **Een vaarder met een eigen account** ziet alleen zijn eigen voortgang.
+- **Wie een examen invult** ziet na het inleveren zijn eigen uitslag, en als de
+  instructeur dat aanzet ook welke vragen goed waren. Bij het werk van een ander komt
+  hij niet: daar is een sleutel voor nodig die alleen in zijn eigen browser staat.
 - **Andere Scoutinggroepen** die de app gebruiken, zien niets van onze gegevens.
 
 Deze regels zijn vastgelegd in de database zelf, niet alleen in de app: ook wie de app
@@ -94,6 +112,9 @@ zij met je gegevens doen, geldt hun eigen privacybeleid.
 - **Gaat iemand van de groep af**, dan blijft zijn voortgang bewaard, zodat hij bij
   terugkeer kan verdergaan waar hij was. Na **2 jaar** zonder lidmaatschap
   verwijderen we zijn gegevens.
+- **Examens**: de gegeven antwoorden gooien we na afloop van het seizoen weg. De
+  uitslag — de naam, de score en of het gehaald is — blijft bewaard, want dat hoort
+  bij de opleiding van die vaarder.
 - **Vraag je om verwijdering**, dan verwijderen we je gegevens eerder; zie hieronder.
 
 ## Je rechten
