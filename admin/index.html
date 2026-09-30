@@ -1445,7 +1445,7 @@ function sessieBlock(sessie) {
     body.append(el('div', { class: 'card', style: 'text-align:center; background:var(--bg)' },
       el('div', { style: 'font-size:44px; font-weight:700; letter-spacing:.2em' }, sessie.code),
       el('p', { class: 'dim' }, open
-        ? `Open tot ${new Date(sessie.closes_at).toLocaleString('nl-NL')}. Invullen kan op scoutingjwf.nl/examen/.`
+        ? `Open tot ${new Date(sessie.closes_at).toLocaleString('nl-NL')}. Invullen kan op scoutingjwf.nl/cwo-examen/.`
         : 'Gesloten. Er kan niets meer bij.')));
 
     if (open) {
