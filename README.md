@@ -6,10 +6,11 @@ publicatie vast en een andere id is voor hen een andere app — nieuwe installat
 nieuwe beoordelingen, en de mensen die de app al hebben krijgen nooit meer een
 update. Dus die blijft, en niemand ziet hem.
 
-Het linkschema is halverwege: de app registreert `aftekenboek://` en `vinkje://`
-allebei, met de oude nog als eerste. Die volgorde omdraaien kan pas als Supabase
-`vinkje://*` in de redirect-allowlist heeft staan en er een native build uitstaat
-die het nieuwe schema kent — zie `src/lib/auth-link.ts`.
+Het linkschema is sinds 0.3.0 `vinkje://`. Het oude `aftekenboek://` blijft
+geregistreerd, want er liggen mails in postvakken die er nog naar wijzen. Beide
+moeten in de redirect-allowlist van Supabase staan, en de volgorde hangt vast aan
+het versienummer — waarom staat in `src/lib/auth-link.ts` en in
+`supabase/README.md`.
 
 De vorderingenstaat voor de Watersport Academy-diploma's van een Scoutinggroep,
 als app voor iOS en Android. Een instructeur tekent op de steiger per eis af;

@@ -84,6 +84,31 @@ zelf test — dan hoef je niet op een mailtje te wachten — maar aan voordat je
 app uitdeelt. De app en de beheerpagina vangen allebei op dat er na het
 registreren nog geen sessie is en zeggen dan dat er een mail onderweg is.
 
+### Waar de link uit de mail heen mag
+
+**Authentication → URL Configuration → Redirect URLs.** Wat daar niet in staat,
+weigert Supabase, en de gebruiker komt na het klikken niet terug in de app. Er
+moeten er twee in:
+
+    vinkje://*
+    aftekenboek://*
+
+De app registreert beide schema's, in die volgorde, en `Linking.createURL` pakt
+de eerste — dus nieuwe mails wijzen naar `vinkje://`. Het oude schema blijft
+staan omdat er mails in postvakken liggen die er nog naar wijzen; haal je het uit
+de lijst, dan werken die links niet meer. Ze zijn allebei nodig.
+
+Dat de app een schema registreert gebeurt bij een **native build**, niet bij een
+OTA-update. Maar de volgorde komt uit `Constants.expoConfig`, en die zit wél in
+een OTA-update. Een update kan dus het schema van een mail omzetten naar iets wat
+de geïnstalleerde app niet kent. Daarom hangt de volgorde aan het versienummer:
+`runtimeVersion` volgt de appVersion, dus een update voor 0.3.0 bereikt een
+0.2.0-app niet. Verander het schema nooit zonder de versie mee te nemen.
+
+Hier staat ook de **Site URL**, en die moet de map van de beheerpagina noemen
+(nu `/cwo-beheer/`). Verhuist die map, dan hier mee: anders vallen de
+bevestigingslinks uit de beheerpagina terug op een 404.
+
 ### Eigen SMTP
 
 De ingebouwde mailer van Supabase heeft een lage limiet, een handvol per uur. Dat

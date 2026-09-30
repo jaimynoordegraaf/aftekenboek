@@ -3,15 +3,24 @@
  *
  * Een herstellink komt terug als
  *
- *     aftekenboek://wachtwoord#access_token=…&refresh_token=…&type=recovery
+ *     vinkje://wachtwoord#access_token=…&refresh_token=…&type=recovery
  *
- * Het schema heet nog `aftekenboek`, niet `vinkje`. De app registreert er sinds
- * de naamswijziging twee, zodat `vinkje://` ook opengaat, maar `aftekenboek://`
- * blijft de eerste en dus wat `Linking.createURL` maakt. Omzetten kan pas als
- * Supabase `vinkje://*` in de redirect-allowlist heeft staan én er een nieuwe
- * native build uitstaat die dat schema kent — draai je de volgorde eerder om,
- * dan wijst een herstelmail naar een schema dat de geïnstalleerde app niet kent
- * en gaat er niets open.
+ * De app registreert twee schema's, `vinkje` en `aftekenboek`, in die volgorde.
+ * `Linking.createURL` pakt de eerste — expo-linking doet letterlijk
+ * `const [scheme] = manifestSchemes` — dus nieuwe mails wijzen naar `vinkje://`.
+ * Het oude schema blijft erbij staan omdat er mails in postvakken liggen die er
+ * nog naar wijzen; haal je het weg, dan gaan die links nergens meer heen.
+ *
+ * Twee dingen die hieraan vastzitten en die je niet los kunt wijzigen:
+ *
+ *   - Beide schema's moeten in de redirect-allowlist van Supabase staan, anders
+ *     weigert Supabase de redirect en komt de gebruiker niet terug in de app.
+ *   - De volgorde staat in `Constants.expoConfig`, en die komt bij een
+ *     OTA-update uit de update zelf. Een OTA kan dus het schema omzetten van een
+ *     app die het nieuwe schema niet geregistreerd heeft — en registreren gebeurt
+ *     alleen bij een native build. Daarom sprong de versie hier mee naar 0.3.0:
+ *     runtimeVersion volgt de appVersion, dus deze update bereikt de 0.2.0-apps
+ *     niet. Zet dit nooit terug naar één versienummer voor beide.
  *
  * met de sleutels achter de `#`, omdat dit project de "implicit" flow gebruikt.
  * Met de PKCE-flow zou er `?code=…` staan; die wordt ook herkend, zodat een
