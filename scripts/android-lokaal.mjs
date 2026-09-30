@@ -73,8 +73,30 @@ const androidHome = bestaat([
 if (!javaHome) stop('Geen JDK gevonden. Zet JAVA_HOME, of pak een JDK 17 uit in %USERPROFILE%/dev/jdk-17...');
 if (!androidHome) stop('Geen Android SDK gevonden. Zet ANDROID_HOME, of zet er een in %USERPROFILE%/dev/android-sdk');
 
-const keystore = path.join(root, 'signing', 'upload.jks');
-const credsBestand = path.join(root, 'signing', 'upload.json');
+// Met --proef bouw je een APK met een wegwerpsleutel die dit script zelf maakt.
+// Die kun je op je eigen telefoon zetten, maar Play weigert hem: daar hoort de
+// echte uploadsleutel bij. Handig om te zien of de gereedschapskist werkt
+// zonder dat je eerst een sleutel hoeft op te halen.
+const proef = args.includes('--proef');
+
+const keystore = path.join(root, 'signing', proef ? 'proef.jks' : 'upload.jks');
+const credsBestand = path.join(root, 'signing', proef ? 'proef.json' : 'upload.json');
+
+if (proef && !fs.existsSync(keystore)) {
+  fs.mkdirSync(path.join(root, 'signing'), { recursive: true });
+  const wachtwoord = 'proefproef';
+  execFileSync(path.join(javaHome, 'bin', 'keytool.exe'), [
+    '-genkeypair', '-keystore', keystore, '-storetype', 'JKS', '-alias', 'proef',
+    '-keyalg', 'RSA', '-keysize', '2048', '-validity', '3650',
+    '-storepass', wachtwoord, '-keypass', wachtwoord,
+    '-dname', 'CN=Vinkje proef, O=Scouting Jan Willem Friso, C=NL',
+  ], { stdio: 'ignore' });
+  fs.writeFileSync(credsBestand, JSON.stringify({
+    storePassword: wachtwoord, keyAlias: 'proef', keyPassword: wachtwoord,
+  }, null, 2));
+  console.log('Wegwerpsleutel gemaakt in signing/proef.jks\n');
+}
+
 if (!fs.existsSync(keystore) || !fs.existsSync(credsBestand)) {
   stop(
     'signing/upload.jks en signing/upload.json ontbreken.\n' +
@@ -203,15 +225,18 @@ fs.writeFileSync(gradlePad, gradle);
 // 6. Bouwen. --console=plain omdat de balk elke seconde opnieuw tekent en een
 //    Windows-terminal elk beeld bewaart; de paar regels die ertoe doen verdwijnen
 //    anders onder duizend keer "92% EXECUTING".
-draai(path.join(androidDir, 'gradlew.bat'), ['bundleRelease', '--console=plain'], {
+const taak = proef ? 'assembleRelease' : 'bundleRelease';
+draai(path.join(androidDir, 'gradlew.bat'), [taak, '--console=plain'], {
   cwd: androidDir,
   env: { ...process.env, JAVA_HOME: javaHome, ANDROID_HOME: androidHome },
 });
 
-const aab = path.join(appDir, 'build', 'outputs', 'bundle', 'release', 'app-release.aab');
-if (!fs.existsSync(aab)) stop('Gradle is klaar, maar er staat geen bundel in ' + aab);
+const uitvoer = proef
+  ? path.join(appDir, 'build', 'outputs', 'apk', 'release', 'app-release.apk')
+  : path.join(appDir, 'build', 'outputs', 'bundle', 'release', 'app-release.aab');
+if (!fs.existsSync(uitvoer)) stop('Gradle is klaar, maar er staat niets in ' + uitvoer);
 
-console.log('\n' + aab);
-console.log((fs.statSync(aab).size / 1024 / 1024).toFixed(1) + ' MB, versionCode ' + versionCode);
+console.log('\n' + uitvoer);
+console.log((fs.statSync(uitvoer).size / 1024 / 1024).toFixed(1) + ' MB, versionCode ' + versionCode);
 if (sha1) console.log('ondertekend met SHA1 ' + sha1);
 if (!minify) console.log('gebouwd zonder R8 (zet --minify om dat aan te zetten)');
