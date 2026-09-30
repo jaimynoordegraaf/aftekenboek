@@ -97,6 +97,7 @@ async function main() {
     '018-eigen-lijsten.sql',
     '019-examens.sql',
     '020-examen-nakijken.sql',
+    '021-examenvraag-bij-eis.sql',
     '010-eisen.sql',
   ]) {
     try {
@@ -1138,6 +1139,35 @@ async function main() {
   );
   check('en zonder inloggen al helemaal niet', antwoordenZonderLogin.n === 0,
     `${antwoordenZonderLogin.n}`);
+
+  // Een vraag mag bij een eis horen, zodat je een examen uit de eisenlijst kunt
+  // bouwen. Verdwijnt die eis later, dan blijft de vraag staan: een afgenomen
+  // examen hoort niet te veranderen omdat iemand de catalogus opruimt.
+  const losseEis = (
+    await as(kamp, () =>
+      db.query(`select add_own_requirement($1, 'theorie', 'Proefeis') as id`, [kopie]),
+    )
+  ).rows[0].id;
+  await as(kamp, () =>
+    db.query(
+      `update exam_questions set requirement_id = $1 where id = $2`,
+      [losseEis, vraag[1]],
+    ),
+  );
+  const gekoppeld = await one(
+    `select requirement_id from exam_questions where id = '${vraag[1]}'`,
+  );
+  check('een vraag kan bij een eis horen', gekoppeld.requirement_id === losseEis,
+    String(gekoppeld.requirement_id));
+
+  await as(kamp, () => db.query(`select delete_own_requirement($1)`, [losseEis]));
+  const naWeghalen = await one(
+    `select count(*)::int as n, count(requirement_id)::int as gekoppeld
+     from exam_questions where id = '${vraag[1]}'`,
+  );
+  check('en blijft bestaan als die eis verdwijnt',
+    naWeghalen.n === 1 && naWeghalen.gekoppeld === 0,
+    `${naWeghalen.n} / ${naWeghalen.gekoppeld}`);
 
   // Afnemen: een sessie met een code.
   const sessie = (

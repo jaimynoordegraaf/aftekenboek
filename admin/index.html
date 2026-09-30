@@ -1242,19 +1242,133 @@ function examenBlock(ex, diplomas) {
           .in('question_id', vragen.map((q) => q.id)).order('position'))
       : [];
 
+    // Bij welke eis een vraag hoort, in één keer opgehaald: anders staat er bij
+    // elke vraag alleen een id dat niemand kan lezen.
+    const eisIds = [...new Set(vragen.map((q) => q.requirement_id).filter(Boolean))];
+    const eisen = eisIds.length
+      ? check(await db.from('requirements').select('id, position, title').in('id', eisIds))
+      : [];
+    const eisVan = Object.fromEntries(eisen.map((r) => [r.id, r]));
+
     body.append(el('h3', {}, `${vragen.length} vragen`));
     for (const vraag of vragen) {
-      body.append(vraagBlock(vraag, opties.filter((o) => o.question_id === vraag.id), vragen));
+      body.append(vraagBlock(vraag, opties.filter((o) => o.question_id === vraag.id), vragen,
+        eisVan[vraag.requirement_id]));
     }
     body.append(nieuweVraag(ex.id, vragen));
+    body.append(uitEisen(ex, vragen, diplomas));
     body.append(sessiesBlock(ex));
   });
 
   return details;
 }
 
-function vraagBlock(vraag, opties, buren) {
+/**
+ * Vragen maken uit de eisenlijst.
+ *
+ * Een theorie-examen gaat over de eisen die toch al in de app staan, dus vink je
+ * ze hier aan in plaats van ze over te typen. De vraag houdt vast bij welke eis
+ * hij hoort (021), zodat een uitslag later terug te vertalen is naar de
+ * vorderingenstaat.
+ *
+ * Wat hier ontstaat is een kale vraag: de eistekst als vraag, en nog geen
+ * antwoorden. Die zet je er daarna zelf onder — welke antwoordmogelijkheden
+ * goed en fout zijn, weet alleen de instructeur.
+ */
+function uitEisen(ex, vragen, diplomas) {
+  const details = el('details', { style: 'margin-top:10px' });
+  details.append(el('summary', {}, 'Vragen uit de eisenlijst'));
+
+  const body = el('div', { style: 'margin-top:10px' });
+  details.append(body);
+
+  const gekozenDiploma = el('select', {},
+    el('option', { value: '' }, 'Kies een diploma'),
+    ...diplomas.map((d) => el('option',
+      { value: d.id, selected: d.id === ex.diploma_id },
+      d.name + (d.kind === 'insigne' ? ' (insigne)' : ''))));
+
+  const soort = el('select', {},
+    el('option', { value: 'theorie' }, 'Theorie-eisen'),
+    el('option', { value: 'praktijk' }, 'Praktijkeisen'));
+
+  const lijst = el('div', { style: 'margin-top:10px' });
+  body.append(el('div', { class: 'row' }, gekozenDiploma, soort));
+  body.append(lijst);
+
+  // Welke eisen al in dit examen zitten; die hoeven er niet nog een keer bij.
+  const alGebruikt = new Set(vragen.map((q) => q.requirement_id).filter(Boolean));
+
+  const laden = async () => {
+    lijst.innerHTML = '';
+    if (!gekozenDiploma.value) return;
+
+    const eisen = check(await db.from('requirements')
+      .select('id, position, title, kind, parent_id')
+      .eq('diploma_id', gekozenDiploma.value)
+      .eq('kind', soort.value)
+      .is('parent_id', null)
+      .order('position'));
+
+    if (eisen.length === 0) {
+      lijst.append(el('p', { class: 'dim' }, 'Dit diploma heeft geen eisen van die soort.'));
+      return;
+    }
+
+    const vakjes = [];
+    for (const eis of eisen) {
+      const aan = el('input', { type: 'checkbox' });
+      aan.dataset.eis = eis.id;
+      aan.dataset.titel = eis.title;
+      if (alGebruikt.has(eis.id)) {
+        aan.disabled = true;
+        aan.checked = true;
+      }
+      vakjes.push(aan);
+      lijst.append(el('div', { class: 'part' },
+        el('label', { class: alGebruikt.has(eis.id) ? 'dim' : '' },
+          aan, ` ${eis.position}. ${eis.title}`),
+        alGebruikt.has(eis.id) ? el('span', { class: 'dim' }, 'staat er al') : null));
+    }
+
+    lijst.append(el('div', { class: 'row', style: 'margin-top:10px' },
+      el('button', {
+        class: 'btn',
+        onclick: async () => {
+          const kiezen = vakjes.filter((v) => v.checked && !v.disabled);
+          if (kiezen.length === 0) return;
+
+          let position = vragen.length
+            ? Math.max(...vragen.map((q) => q.position)) + 1
+            : 1;
+          const nieuwe = kiezen.map((v) => ({
+            exam_id: ex.id,
+            position: position++,
+            prompt: v.dataset.titel,
+            requirement_id: v.dataset.eis,
+          }));
+
+          await run(async () => check(await db.from('exam_questions').insert(nieuwe)),
+            `${nieuwe.length} ${nieuwe.length === 1 ? 'vraag' : 'vragen'} toegevoegd`);
+          render();
+        },
+      }, 'Toevoegen als vragen'),
+      el('span', { class: 'dim' }, 'De antwoorden zet je er daarna zelf onder.')));
+  };
+
+  gekozenDiploma.addEventListener('change', laden);
+  soort.addEventListener('change', laden);
+  details.addEventListener('toggle', () => { if (details.open) laden(); });
+
+  return details;
+}
+
+function vraagBlock(vraag, opties, buren, eis) {
   const wrap = el('div', { class: 'card', style: 'background:var(--bg)' });
+  if (eis) {
+    wrap.append(el('p', { class: 'dim', style: 'margin:0 0 6px' },
+      `Hoort bij eis ${eis.position}: ${eis.title}`));
+  }
   const tekst = field('Vraag', vraag.prompt, { multiline: true });
   const punten = field('Punten', vraag.points, { wrapClass: 'num' });
   punten.input.type = 'number';

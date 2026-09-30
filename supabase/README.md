@@ -55,6 +55,9 @@ project dat al bestaat:
                               meekijken; deelnemers hebben geen account
     020-examen-nakijken.sql   na het inleveren zien wat goed en fout was, als
                               de sessie dat toestaat
+    021-examenvraag-bij-eis.sql
+                              een examenvraag mag bij een eis horen, zodat je
+                              een examen uit de eisenlijst kunt bouwen
 
 `010-eisen.sql` draait **als laatste**, ook al is zijn nummer lager. De catalogus
 hangt aan elke schemawijziging die erna genummerd is, dus hij wordt steeds
