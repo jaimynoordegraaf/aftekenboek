@@ -111,6 +111,10 @@ function Gate() {
           options={{ title: 'Lid toevoegen', presentation: 'modal' }}
         />
         <Stack.Screen
+          name="groep/aanmelden"
+          options={{ title: 'Aanmelden bij een groep', presentation: 'modal' }}
+        />
+        <Stack.Screen
           name="eigen/nieuw"
           options={{ title: 'Eigen lijst', presentation: 'modal' }}
         />

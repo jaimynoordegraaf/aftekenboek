@@ -39,6 +39,11 @@ export default function Meer() {
 
         <Card style={{ paddingVertical: space.xs }}>
           <LinkRow label="Mijn gegevens" onPress={() => router.push('/profiel')} />
+          <Divider />
+          <LinkRow
+            label="Aanmelden bij een groep"
+            onPress={() => router.push('/groep/aanmelden')}
+          />
           {admin ? (
             <>
               <Divider />
