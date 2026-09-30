@@ -20,7 +20,8 @@
     "screenshots": "node scripts/store-screenshots.mjs",
     "handleiding": "node scripts/handleiding-pdf.mjs docs/handleiding.html docs/handleiding-print.html",
     "examen": "node admin/serve.mjs examen",
-    "examen:build": "node admin/build.mjs examen"
+    "examen:build": "node admin/build.mjs examen",
+    "android:lokaal": "node scripts/android-lokaal.mjs"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

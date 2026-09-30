@@ -21,3 +21,9 @@ dist-examen/
 # Examenvragen zijn van de werkgroep CWO-examenvragen; die horen niet in een
 # openbare repo.
 examens-import/
+
+# De uploadsleutel voor Play. Kwijtraken betekent dat Play geen nieuwe
+# versies meer aanneemt; delen betekent dat iemand anders ze kan ondertekenen.
+signing/
+android/
+ios/
