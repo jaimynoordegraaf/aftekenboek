@@ -15,6 +15,8 @@
  *
  *   - Beide schema's moeten in de redirect-allowlist van Supabase staan, anders
  *     weigert Supabase de redirect en komt de gebruiker niet terug in de app.
+ *     `vinkje://*` alleen was niet genoeg: er staan per schema ook een `**`-regel
+ *     en een regel voor `/wachtwoord` in (zie supabase/README.md).
  *   - De volgorde staat in `Constants.expoConfig`, en die komt bij een
  *     OTA-update uit de update zelf. Een OTA kan dus het schema omzetten van een
  *     app die het nieuwe schema niet geregistreerd heeft — en registreren gebeurt

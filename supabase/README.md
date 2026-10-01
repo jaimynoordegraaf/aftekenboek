@@ -88,10 +88,26 @@ registreren nog geen sessie is en zeggen dan dat er een mail onderweg is.
 
 **Authentication → URL Configuration → Redirect URLs.** Wat daar niet in staat,
 weigert Supabase, en de gebruiker komt na het klikken niet terug in de app. Er
-moeten er twee in:
+moeten voor elk schema drie regels in:
 
     vinkje://*
+    vinkje://**
+    vinkje://wachtwoord
     aftekenboek://*
+    aftekenboek://**
+    aftekenboek://wachtwoord
+
+Met alleen `vinkje://*` en `aftekenboek://*` werkte het niet: Supabase weigerde
+de redirect en zette stilletjes de Site URL in de mail, waardoor de link in de
+browser bleef hangen in plaats van de app te openen. Er is niet uitgezocht welke
+van de extra regels het oploste, dus haal er geen weg. Dit is vastgesteld op een
+preview-APK van 0.3.0 met een echte herstelmail.
+
+Een weigering is te herkennen aan `redirect_to=` in de link uit de mail: die staat
+dan op de Site URL in plaats van op `vinkje://wachtwoord`. Supabase geeft zelf
+geen foutmelding. De redirect wordt vastgelegd op het moment dat de mail wordt
+aangevraagd, dus na een wijziging van de lijst moet je een nieuwe mail
+aanvragen; een oude link blijft naar de browser gaan.
 
 De app registreert beide schema's, in die volgorde, en `Linking.createURL` pakt
 de eerste — dus nieuwe mails wijzen naar `vinkje://`. Het oude schema blijft
