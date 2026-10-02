@@ -69,6 +69,9 @@ project dat al bestaat:
                               uitslag blijft. Alleen een beheerder
     026-voortgang.sql         de stand van de hele groep in een keer: per lid, en
                               per eis wie hem nog mist. Alleen instructeurs
+    027-oud-lid.sql           wie van de groep af is verdwijnt uit het overzicht maar
+                              houdt zijn aftekeningen; met een lijst en een knop
+                              om die na de beloofde 2 jaar echt op te ruimen
 
 `010-eisen.sql` draait **als laatste**, ook al is zijn nummer lager. De catalogus
 hangt aan elke schemawijziging die erna genummerd is, dus hij wordt steeds

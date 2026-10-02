@@ -90,6 +90,7 @@
   .eisrij .kop { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
   .teller { font-size: 13px; font-weight: 600; white-space: nowrap; }
   .teller.klaar { color: var(--good); }
+  .teller.let-op { color: var(--warn); }
   .keuzeregel {
     display: flex; justify-content: space-between; gap: 12px; width: 100%;
     text-align: left; font: inherit; cursor: pointer; padding: 10px 12px;
@@ -642,6 +643,7 @@ async function renderLeden(view) {
 
   view.append(filterRow, list);
   paint();
+  oudLeden(view);
   return;
 
   function memberCard(m, sections) {
@@ -725,6 +727,64 @@ async function renderLeden(view) {
 }
 
 // ---- Codes
+
+// ---- Oud-leden
+//
+// Wie uit de groep gehaald wordt, houdt zijn aftekeningen. Dat is met opzet en
+// staat zo in het privacybeleid: een seizoen overslaan hoort niet te betekenen
+// dat je opnieuw begint. Maar bewaren wat niemand kan zien is het slechtste van
+// twee werelden -- de gegevens staan er, niemand weet het, en na de beloofde
+// twee jaar ruimt niemand ze op. Daarom staan ze hier, met de datum erbij.
+
+async function oudLeden(view) {
+  const rijen = await run(async () => check(
+    await db.rpc('former_members', { p_group: group.id })));
+  if (!rijen.length) return;
+
+  const verlopen = rijen.filter((r) => r.over_de_tijd);
+  const doos = el('div', { class: 'card' });
+  doos.append(el('h3', {}, 'Niet meer in de groep'));
+  doos.append(el('p', { class: 'dim' },
+    'Deze mensen staan niet meer in de ledenlijst, maar hun aftekeningen zijn bewaard ' +
+    'zodat ze bij terugkeer verder kunnen waar ze waren. Voeg je iemand opnieuw toe, ' +
+    'dan staat zijn lijst er weer. Het privacybeleid belooft dat we na twee jaar ' +
+    'opruimen; dat gaat niet vanzelf, dus dat is deze knop.'));
+
+  if (verlopen.length) {
+    doos.append(el('p', { class: 'teller' },
+      verlopen.length === 1
+        ? 'Van één persoon staat het er langer dan twee jaar.'
+        : 'Van ' + verlopen.length + ' mensen staat het er langer dan twee jaar.'));
+  }
+
+  for (const r of rijen) {
+    const rij = el('div', { class: 'eisrij' });
+    rij.append(el('div', { class: 'kop' },
+      el('span', {}, el('b', {}, r.full_name),
+        el('span', { class: 'dim' },
+          ' ' + r.opleidingen + (Number(r.opleidingen) === 1 ? ' opleiding' : ' opleidingen') +
+          ', ' + r.aftekeningen + (Number(r.aftekeningen) === 1 ? ' aftekening' : ' aftekeningen'))),
+      el('span', { class: 'teller' + (r.over_de_tijd ? ' let-op' : '') },
+        'weg sinds ' + datumKort(r.left_at))));
+
+    rij.append(el('button', {
+      class: 'btn danger',
+      style: 'margin-top:8px',
+      onclick: async () => {
+        if (!confirmed(
+          'Alle aftekeningen van ' + r.full_name + ' in deze groep weggooien?\n\n' +
+          'Dit kan niet ongedaan gemaakt worden. Komt hij later terug, dan begint ' +
+          'hij opnieuw.')) return;
+        await run(async () => check(await db.rpc('delete_member_progress', {
+          p_group: group.id, p_profile: r.profile_id,
+        })), 'Gegevens van ' + r.full_name + ' verwijderd');
+        render();
+      },
+    }, 'Gegevens verwijderen'));
+    doos.append(rij);
+  }
+  view.append(doos);
+}
 
 // ---- Voortgang
 //

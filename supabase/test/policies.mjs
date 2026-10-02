@@ -103,6 +103,7 @@ async function main() {
     '024-examen-geslaagd.sql',
     '025-examen-opruimen.sql',
     '026-voortgang.sql',
+    '027-oud-lid.sql',
     '010-eisen.sql',
   ]) {
     try {
@@ -849,6 +850,69 @@ async function main() {
     `select count(*)::int as n from enrollments where profile_id = '${nina}'`,
   );
   check('haar voortgang blijft bewaard', kept.n === 1, `${kept.n}`);
+
+  // Bewaard is niet hetzelfde als zichtbaar. Wie uit de groep is, hoort uit het
+  // voortgangsoverzicht te verdwijnen zoals hij uit de ledenlijst verdwijnt --
+  // anders staat iemand die er niet meer is nog wel in het lijstje "wie moet
+  // wat nog doen", en ga je een middag plannen voor iemand die niet komt.
+  const naVerwijderen = await as(wim, async () =>
+    (await db.query('select * from group_progress($1)', [jwf])).rows);
+  check('en verdwijnt uit het voortgangsoverzicht',
+    naVerwijderen.every((r) => r.profile_id !== nina),
+    'Nina staat er nog in');
+
+  const rasterNa = await as(wim, async () =>
+    (await db.query('select * from diploma_eis_stand($1, $2)', [jwf, roeien12])).rows);
+  check('en uit het raster per eis',
+    rasterNa.every((r) => r.profile_id !== nina),
+    'Nina staat er nog in');
+
+  // Bewaren wat niemand kan zien is het slechtste van twee werelden. Wie weg is
+  // maar nog gegevens heeft staan, staat op een eigen lijst.
+  const weggegaan = await as(wim, async () =>
+    (await db.query('select * from former_members($1)', [jwf])).rows);
+  const ninaWeg = weggegaan.find((r) => r.profile_id === nina);
+  check('wie weg is staat op de lijst oud-leden', Boolean(ninaWeg),
+    `${weggegaan.length} regels`);
+  check('met wat er van hem bewaard is',
+    ninaWeg && Number(ninaWeg.opleidingen) === 1,
+    ninaWeg ? `${ninaWeg.opleidingen}` : 'geen regel');
+  check('en een vertrekdatum, zodat de 2 jaar te meten is',
+    ninaWeg && ninaWeg.left_at !== null);
+  check('die nog niet verlopen is', ninaWeg && ninaWeg.over_de_tijd === false,
+    ninaWeg ? String(ninaWeg.over_de_tijd) : 'geen regel');
+
+  const lijstVoorLid = await refused(sam, 'select * from former_members($1)', [jwf]);
+  check('een lid ziet die lijst niet', lijstVoorLid !== null, 'het lukte wel');
+
+  // Wissen op een wegwerp-vaarder, zodat Nina's gegevens blijven staan voor de
+  // secties die hierna komen.
+  const tijdelijk = await as(wim, async () =>
+    (await db.query('select add_member($1, $2) as id', [jwf, 'Kees Tijdelijk'])).rows[0].id);
+  await as(wim, () => db.query(
+    'insert into enrollments (group_id, profile_id, diploma_id) values ($1, $2, $3)',
+    [jwf, tijdelijk, roeien12]));
+
+  const nogLid = await refused(wim,
+    'select delete_member_progress($1, $2)', [jwf, tijdelijk]);
+  check('wissen kan niet zolang iemand nog in de groep zit', nogLid !== null,
+    'het lukte wel');
+
+  await as(wim, () => db.query('select remove_member($1, $2)', [jwf, tijdelijk]));
+  const doorLid = await refused(sam,
+    'select delete_member_progress($1, $2)', [jwf, tijdelijk]);
+  check('en een lid wist sowieso niets', doorLid !== null, 'het lukte wel');
+
+  const gewistVoorOudLid = await as(wim, async () =>
+    (await db.query('select delete_member_progress($1, $2) as n', [jwf, tijdelijk])).rows[0].n);
+  check('een beheerder wist de vorderingen van een oud-lid', Number(gewistVoorOudLid) === 1,
+    `${gewistVoorOudLid}`);
+  const restje = await one(
+    `select count(*)::int as n from enrollments where profile_id = '${tijdelijk}'`);
+  check('en er blijft niets van staan', restje.n === 0, `${restje.n}`);
+  const naamWeg = await one(
+    `select count(*)::int as n from profiles where id = '${tijdelijk}'`);
+  check('ook zijn naam, want hij had geen account', naamWeg.n === 0, `${naamWeg.n}`);
 
   const byLid = await refused(sam, 'select remove_member($1, $2)', [jwf, wim]);
   check('een lid kan niemand verwijderen', byLid !== null, 'het lukte wel');
