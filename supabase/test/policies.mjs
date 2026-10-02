@@ -104,6 +104,7 @@ async function main() {
     '025-examen-opruimen.sql',
     '026-voortgang.sql',
     '027-oud-lid.sql',
+    '028-lesmateriaal.sql',
     '010-eisen.sql',
   ]) {
     try {
@@ -1555,6 +1556,74 @@ async function main() {
                  where id = '${sessie.session_id}'`);
   const verlopen = await refused('', `select * from exam_join($1, 'Te laat')`, [sessie.code]);
   check('een sessie die over zijn tijd is ook niet', verlopen !== null, 'het lukte wel');
+
+  section('Lesmateriaal');
+
+  // Eigen mensen. Deze sectie staat achteraan, en daar is wim allang geen lid
+  // meer van jwf -- de secties hierboven halen hem eruit. Een sectie die op de
+  // nalatenschap van veertien andere leunt, faalt op een dag om een reden die
+  // niets met het onderwerp te maken heeft.
+  const lesLeiding = await newUser('lesleiding@voorbeeld.nl', 'Lesbaas');
+  const lesVaarder = await newUser('lesvaarder@voorbeeld.nl', 'Lesvaarder');
+  await db.exec(
+    `insert into memberships (group_id, profile_id, role) values
+       ('${jwf}', '${lesLeiding}', 'instructeur'),
+       ('${jwf}', '${lesVaarder}', 'lid')`,
+  );
+
+  const lesPad = jwf + '/' + '11111111-1111-1111-1111-111111111111.pdf';
+  const gezet = await refused(lesLeiding,
+    `insert into materials (group_id, diploma_id, title, path, bytes)
+     values ($1, $2, $3, $4, $5)`,
+    [jwf, roeien12, 'Lesboek Roeien', lesPad, 1234]);
+  check('een instructeur zet er lesmateriaal in', gezet === null, gezet ?? '');
+
+  // Dit is het punt van de hele tabel: een gewoon lid moet erbij kunnen. Bij de
+  // eisenlijst is lezen voor iedereen en schrijven voor de leiding; hier ook,
+  // maar lezen is hier het doel en niet de bijvangst.
+  const doorLidGelezen = await as(lesVaarder, async () =>
+    (await db.query('select * from materials')).rows);
+  check('een lid van de groep kan het lezen', doorLidGelezen.length === 1,
+    `${doorLidGelezen.length}`);
+
+  const doorLidGezet = await refused(lesVaarder,
+    `insert into materials (group_id, title, path) values ($1, $2, $3)`,
+    [jwf, 'Stiekem', jwf + '/22222222-2222-2222-2222-222222222222.pdf']);
+  check('maar er niets in zetten', doorLidGezet !== null, 'het lukte wel');
+
+  const doorLidWeg = await refused(lesVaarder, 'delete from materials where group_id = $1', [jwf]);
+  const erStaatNog = await one('select count(*)::int as n from materials');
+  check('en niets weggooien', doorLidWeg !== null || erStaatNog.n === 1, `${erStaatNog.n}`);
+
+  // Een andere groep hoort het niet eens te zien staan. Lesmateriaal is vaak van
+  // iemand anders; toestemming voor de ene groep is geen toestemming voor alle.
+  const lesDoorVreemde = await as(ander, async () =>
+    (await db.query('select * from materials')).rows);
+  check('een andere groep ziet het niet', lesDoorVreemde.length === 0,
+    `${lesDoorVreemde.length}`);
+
+  const vreemdeZet = await refused(ander,
+    `insert into materials (group_id, title, path) values ($1, $2, $3)`,
+    [jwf, 'Indringer', jwf + '/33333333-3333-3333-3333-333333333333.pdf']);
+  check('en kan er niets in zetten', vreemdeZet !== null, 'het lukte wel');
+
+  // Een eigen lijst weggooien mag geen bestand meenemen: het materiaal wordt
+  // algemeen, niet weg.
+  const losseLijst = await as(lesLeiding, async () =>
+    (await db.query(`select create_own_list($1, $2, 'diploma') as id`,
+      [jwf, 'Tijdelijke lijst'])).rows[0].id);
+  await as(lesLeiding, () => db.query(
+    `insert into materials (group_id, diploma_id, title, path) values ($1, $2, $3, $4)`,
+    [jwf, losseLijst, 'Hoort bij die lijst',
+      jwf + '/44444444-4444-4444-4444-444444444444.pdf']));
+  await as(lesLeiding, () => db.query('select delete_own_list($1)', [losseLijst]));
+  const naWeggooien = await one(
+    `select count(*)::int as n, count(diploma_id)::int as metDiploma
+       from materials where path like '%44444444%'`);
+  check('een lijst weggooien neemt het materiaal niet mee', naWeggooien.n === 1,
+    `${naWeggooien.n}`);
+  check('het wordt algemeen in plaats van weg', naWeggooien.metdiploma === 0,
+    `${naWeggooien.metdiploma}`);
 
   report();
   process.exit(failures === 0 ? 0 : 1);

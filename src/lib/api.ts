@@ -18,6 +18,7 @@ import type {
   EnrollmentRow,
   Invite,
   ListKind,
+  Material,
   MemberRow,
   Requirement,
   RequirementKind,
@@ -655,4 +656,37 @@ export async function setOwnRequirementOrder(
     p_ids: ids,
   });
   if (error) throw error;
+}
+
+// ---------------------------------------------------------------- lesmateriaal
+
+/**
+ * Lesboeken en naslagkaarten die de groep zelf heeft neergezet.
+ *
+ * De bestanden staan in een afgeschermde map. Een vast adres bestaat dus niet;
+ * je vraagt er een link voor die een uur geldig is, en die krijg je alleen als
+ * je in de groep zit. Dat is strenger dan bij de plaatjes in een examen, omdat
+ * lesmateriaal vaak door iemand anders gemaakt is.
+ */
+export async function fetchMaterials(
+  groupId: string,
+  diplomaId: string,
+): Promise<Material[]> {
+  const { data, error } = await db()
+    .from('materials')
+    .select('id, title, path, bytes, created_at')
+    .eq('group_id', groupId)
+    .eq('diploma_id', diplomaId)
+    .order('title');
+  if (error) throw error;
+  return (data ?? []) as Material[];
+}
+
+/** Een link die een uur meegaat. Daarna moet je opnieuw vragen. */
+export async function signedMaterialUrl(path: string): Promise<string> {
+  const { data, error } = await db().storage
+    .from('lesmateriaal')
+    .createSignedUrl(path, 3600);
+  if (error) throw error;
+  return data.signedUrl;
 }

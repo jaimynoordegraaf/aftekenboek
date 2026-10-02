@@ -184,6 +184,7 @@
       <button data-tab="speltakken">Speltakken</button>
       <button data-tab="bakken">Bakken</button>
       <button data-tab="catalogus">Diploma's en eisen</button>
+      <button data-tab="lesmateriaal">Lesmateriaal</button>
       <button data-tab="examens">Examens</button>
     </nav>
     <span class="who" id="who"></span>
@@ -586,6 +587,7 @@ function render() {
   else if (tab === 'codes') renderCodes(view);
   else if (tab === 'speltakken') renderSpeltakken(view);
   else if (tab === 'bakken') renderBakken(view);
+  else if (tab === 'lesmateriaal') renderLesmateriaal(view);
   else if (tab === 'examens') renderExamens(view);
   else renderCatalogus(view);
 }
@@ -784,6 +786,166 @@ async function oudLeden(view) {
     doos.append(rij);
   }
   view.append(doos);
+}
+
+// ---- Lesmateriaal
+//
+// Bestanden die een vaarder erbij wil hebben als hij voor een diploma leert.
+// Ze staan in een afgeschermde map: alleen wie in de groep zit krijgt een link,
+// en die link verloopt. Dat is strenger dan bij de examenplaatjes, met reden --
+// lesmateriaal is vaak van iemand anders gemaakt.
+
+let lesDiploma = null;   // waar een nieuwe upload bij hoort; null = algemeen
+
+function bytesKort(n) {
+  if (!n) return null;
+  return n >= 1048576
+    ? (n / 1048576).toFixed(1) + ' MB'
+    : Math.max(1, Math.round(n / 1024)) + ' kB';
+}
+
+async function renderLesmateriaal(view) {
+  view.append(el('h2', {}, 'Lesmateriaal'));
+  view.append(el('p', { class: 'dim' },
+    'Lesboeken, naslagkaarten, eigen uitleg. Iedereen in de groep kan ze openen in de app, ' +
+    'ook vaarders zonder instructeursrol. Toevoegen en weghalen is voor instructeurs.'));
+
+  // Dit staat hier omdat dit het moment is waarop het ertoe doet: met het
+  // bestand al in je hand, vlak voor je op uploaden drukt.
+  view.append(el('div', { class: 'card' },
+    el('p', {},
+      el('b', {}, 'Is het materiaal van iemand anders? Vraag het eerst. '),
+      el('span', { class: 'dim' },
+        'Wat je hier neerzet komt in een app die in de stores staat. Voor een lesboek van ' +
+        'een andere groep of een uitgever heb je toestemming nodig — die geldt dan voor ' +
+        'jouw groep, want elke groep heeft zijn eigen map en ziet die van een ander niet.'))));
+
+  const [rijen, diplomas] = await Promise.all([
+    run(async () => check(await db.from('materials').select('*')
+      .eq('group_id', group.id).order('created_at'))),
+    run(async () => check(await db.from('diplomas').select('id, name, group_id')
+      .order('sort_order'))),
+  ]);
+
+  view.append(uploadBlok(diplomas));
+
+  const naam = new Map(diplomas.map((d) => [d.id, d.name]));
+  const perDiploma = new Map();
+  for (const r of rijen) {
+    const sleutel = r.diploma_id ?? '';
+    if (!perDiploma.has(sleutel)) perDiploma.set(sleutel, []);
+    perDiploma.get(sleutel).push(r);
+  }
+
+  const doos = el('div', { class: 'card' });
+  doos.append(el('h3', {}, 'Wat erin staat'));
+  if (rijen.length === 0) {
+    doos.append(el('p', { class: 'dim' }, 'Nog niets. Hierboven zet je het eerste bestand erin.'));
+  }
+  for (const [dipId, lijst] of perDiploma) {
+    doos.append(el('div', { class: 'kop', style: 'margin-top:14px' },
+      el('b', {}, dipId ? (naam.get(dipId) ?? 'Onbekend diploma') : 'Algemeen'),
+      el('span', { class: 'teller' }, String(lijst.length))));
+    for (const r of lijst) doos.append(materiaalRij(r));
+  }
+  view.append(doos);
+}
+
+function uploadBlok(diplomas) {
+  const doos = el('div', { class: 'card' });
+  doos.append(el('h3', {}, 'Toevoegen'));
+
+  const titel = field('Titel', '', {});
+  titel.input.placeholder = 'Lesboek Kielboot I';
+
+  const kiezer = el('div', { class: 'row', style: 'flex-wrap:wrap; margin-top:10px' },
+    el('span', { class: 'dim', style: 'margin-right:4px' }, 'Hoort bij:'));
+  const teken = () => {
+    [...kiezer.querySelectorAll('.chip')].forEach((c) => c.remove());
+    kiezer.append(chip('Algemeen', lesDiploma === null, () => { lesDiploma = null; teken(); }));
+    for (const d of diplomas) {
+      kiezer.append(chip(d.name, lesDiploma === d.id, () => { lesDiploma = d.id; teken(); }));
+    }
+  };
+  teken();
+
+  const bestandKiezer = el('input', {
+    type: 'file', accept: '.pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg',
+  });
+
+  const knop = el('button', {
+    class: 'btn',
+    onclick: async () => {
+      const bestand = bestandKiezer.files?.[0];
+      if (!bestand) { say('Kies eerst een bestand.', 'err'); return; }
+      const naam = titel.input.value.trim() || bestand.name.replace(/\.[^.]+$/, '');
+      if (naam.length < 2) { say('Geef het een titel.', 'err'); return; }
+
+      knop.disabled = true;
+      try {
+        // De groep staat vooraan in het pad: de opslagregels kennen de tabel
+        // materials niet en kijken alleen hiernaar.
+        const ext = (bestand.name.split('.').pop() ?? 'pdf').toLowerCase();
+        const pad = `${group.id}/${crypto.randomUUID()}.${ext}`;
+        await run(async () => {
+          const op = await db.storage.from('lesmateriaal').upload(pad, bestand, {
+            contentType: bestand.type || 'application/pdf',
+          });
+          if (op.error) throw op.error;
+          // Pas een regel maken als het bestand er echt staat. Andersom houd je
+          // een regel over die naar niets wijst.
+          check(await db.from('materials').insert({
+            group_id: group.id, diploma_id: lesDiploma,
+            title: naam, path: pad, bytes: bestand.size,
+          }));
+        }, `${naam} staat erin`);
+        render();
+      } finally {
+        knop.disabled = false;
+      }
+    },
+  }, 'Uploaden');
+
+  doos.append(el('div', { class: 'row' }, titel.wrap));
+  doos.append(kiezer);
+  doos.append(el('div', { class: 'row', style: 'margin-top:10px' }, bestandKiezer, knop));
+  doos.append(el('p', { class: 'dim', style: 'margin-top:8px' },
+    'PDF, PNG of JPEG, tot 25 MB.'));
+  return doos;
+}
+
+function materiaalRij(r) {
+  const rij = el('div', { class: 'eisrij' });
+  const bij = [bytesKort(r.bytes), datumKort(r.created_at)].filter(Boolean).join(' · ');
+
+  rij.append(el('div', { class: 'kop' },
+    el('span', {}, r.title, bij ? el('span', { class: 'dim' }, ' ' + bij) : null),
+    el('span', { class: 'row', style: 'gap:6px' },
+      el('button', {
+        class: 'btn ghost',
+        onclick: async () => {
+          // Een ondertekende link, een uur geldig. De map is afgeschermd, dus
+          // zonder dit kom je er niet in -- ook niet als je het pad kent.
+          await run(async () => {
+            const op = await db.storage.from('lesmateriaal').createSignedUrl(r.path, 3600);
+            if (op.error) throw op.error;
+            window.open(op.data.signedUrl, '_blank', 'noopener');
+          });
+        },
+      }, 'Openen'),
+      el('button', {
+        class: 'btn danger',
+        onclick: async () => {
+          if (!confirmed(`"${r.title}" weghalen? Het bestand gaat ook weg.`)) return;
+          await run(async () => {
+            const op = await db.storage.from('lesmateriaal').remove([r.path]);
+            if (op.error) throw op.error;
+            check(await db.from('materials').delete().eq('id', r.id));
+          }, 'Weggehaald');
+          render();
+        },
+      }, 'Weghalen'))));
+  return rij;
 }
 
 // ---- Voortgang

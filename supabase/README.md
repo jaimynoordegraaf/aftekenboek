@@ -72,6 +72,9 @@ project dat al bestaat:
     027-oud-lid.sql           wie van de groep af is verdwijnt uit het overzicht maar
                               houdt zijn aftekeningen; met een lijst en een knop
                               om die na de beloofde 2 jaar echt op te ruimen
+    028-lesmateriaal.sql      lesboeken en naslagkaarten van de groep bij een
+                              diploma, in een afgeschermde map. Lezen mag elk lid,
+                              uploaden alleen de leiding
 
 `010-eisen.sql` draait **als laatste**, ook al is zijn nummer lager. De catalogus
 hangt aan elke schemawijziging die erna genummerd is, dus hij wordt steeds

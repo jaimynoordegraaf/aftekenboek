@@ -254,3 +254,16 @@ export function theoryStatus(e: EnrollmentRow, now = new Date()): TheoryStatus {
   if (daysLeft <= 60) return { state: 'expiring', until, daysLeft };
   return { state: 'valid', until, daysLeft };
 }
+
+/**
+ * Een bestand dat de groep bij een diploma heeft gezet: een lesboek, een
+ * naslagkaart. `path` wijst in de afgeschermde opslagmap; een adres om direct
+ * te openen is er niet, dat vraag je per keer op.
+ */
+export type Material = {
+  id: string;
+  title: string;
+  path: string;
+  bytes: number | null;
+  created_at: string;
+};

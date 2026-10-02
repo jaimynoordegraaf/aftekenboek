@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Alert, Modal, Pressable, View } from 'react-native';
+import { Alert, Linking, Modal, Pressable, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 
 import {
@@ -20,12 +20,14 @@ import {
   deleteOwnList,
   deleteOwnRequirement,
   fetchDiploma,
+  fetchMaterials,
   setOwnRequirementOrder,
+  signedMaterialUrl,
   updateOwnRequirement,
 } from '@/lib/api';
-import { useIsStaff } from '@/lib/session';
+import { useIsStaff, useSession } from '@/lib/session';
 import { useAsync } from '@/lib/use-async';
-import { KIND_LABEL, type Requirement, type RequirementKind } from '@/lib/types';
+import { KIND_LABEL, type Material, type Requirement, type RequirementKind } from '@/lib/types';
 import { radius, space } from '@/theme';
 import { useTheme } from '@/lib/use-theme';
 
@@ -148,6 +150,8 @@ export default function DiplomaDetail() {
           <Txt variant="title">{diploma.name}</Txt>
           {diploma.summary ? <Txt dim>{diploma.summary}</Txt> : null}
         </View>
+
+        <Lesmateriaal diplomaId={diploma.id} />
 
         <Segmented
           value={kind}
@@ -303,6 +307,78 @@ export default function DiplomaDetail() {
       />
     </Screen>
   );
+}
+
+/**
+ * Lesboeken en naslagkaarten die de groep bij dit diploma heeft gezet.
+ *
+ * Staat er niets, dan staat er ook niets op het scherm: de meeste diploma's
+ * hebben geen eigen materiaal, en een lege kaart met "nog niets" is dan alleen
+ * ruis boven de eisen waar je voor kwam.
+ *
+ * Openen gaat met een link die een uur meegaat en per keer wordt opgevraagd; de
+ * map is afgeschermd, dus een vast adres bestaat niet. De PDF opent buiten de
+ * app, in de viewer van de telefoon zelf. Een eigen viewer zou mooier zijn,
+ * maar dat kost een extra native pakket en daarmee een nieuwe build in beide
+ * stores -- dit werkt vandaag, met een OTA-update.
+ */
+function Lesmateriaal({ diplomaId }: { diplomaId: string }) {
+  const groupId = useSession((s) => s.activeGroupId);
+  const theme = useTheme();
+  const [bezig, setBezig] = useState<string | null>(null);
+  const [fout, setFout] = useState<string | null>(null);
+
+  const { data } = useAsync(
+    () => (groupId ? fetchMaterials(groupId, diplomaId) : Promise.resolve([] as Material[])),
+    [groupId, diplomaId],
+  );
+
+  if (!data || data.length === 0) return null;
+
+  async function open(m: Material) {
+    setBezig(m.id);
+    setFout(null);
+    try {
+      await Linking.openURL(await signedMaterialUrl(m.path));
+    } catch (e) {
+      setFout(e instanceof Error ? e.message : 'Openen lukte niet.');
+    } finally {
+      setBezig(null);
+    }
+  }
+
+  return (
+    <Card style={{ gap: 0 }}>
+      <Txt variant="small" dim style={{ paddingBottom: space.xs }}>
+        Lesmateriaal van onze groep
+      </Txt>
+      {data.map((m, i) => (
+        <View key={m.id}>
+          {i > 0 ? <Divider /> : null}
+          <Pressable
+            onPress={() => void open(m)}
+            disabled={bezig !== null}
+            style={{ paddingVertical: space.md, opacity: bezig === m.id ? 0.5 : 1 }}
+          >
+            <Row style={{ justifyContent: 'space-between', gap: space.md }}>
+              <Txt style={{ flex: 1, color: theme.accent }}>{m.title}</Txt>
+              <Txt variant="small" dim>
+                {bezig === m.id ? 'bezig…' : grootte(m.bytes)}
+              </Txt>
+            </Row>
+          </Pressable>
+        </View>
+      ))}
+      <ErrorNote error={fout} />
+    </Card>
+  );
+}
+
+function grootte(bytes: number | null): string {
+  if (!bytes) return 'openen';
+  return bytes >= 1048576
+    ? `${(bytes / 1048576).toFixed(1)} MB`
+    : `${Math.max(1, Math.round(bytes / 1024))} kB`;
 }
 
 type Bewerking =
