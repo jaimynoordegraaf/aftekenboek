@@ -67,6 +67,8 @@ project dat al bestaat:
                               geslaagd is, met het percentage en de grens
     025-examen-opruimen.sql   gegeven antwoorden van oude examens wissen; de
                               uitslag blijft. Alleen een beheerder
+    026-voortgang.sql         de stand van de hele groep in een keer: per lid, en
+                              per eis wie hem nog mist. Alleen instructeurs
 
 `010-eisen.sql` draait **als laatste**, ook al is zijn nummer lager. De catalogus
 hangt aan elke schemawijziging die erna genummerd is, dus hij wordt steeds

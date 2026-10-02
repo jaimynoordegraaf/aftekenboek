@@ -102,6 +102,7 @@ async function main() {
     '023-examen-afbeeldingen.sql',
     '024-examen-geslaagd.sql',
     '025-examen-opruimen.sql',
+    '026-voortgang.sql',
     '010-eisen.sql',
   ]) {
     try {
@@ -561,6 +562,70 @@ async function main() {
   const lidStand = await refused(sam,
     `select set_sign_off_status($1, $2, 'gehaald', null)`, [samEnrollment, eis2]);
   check('een lid zet geen stand', lidStand !== null, 'het lukte wel');
+
+  section('De voortgang van de hele groep');
+
+  // Eerst een eigen uitgangsstand, zodat deze sectie niet leunt op wat de
+  // vorige liet liggen: Sam heeft eis 1 gehaald en is met eis 2 bezig. Zonder
+  // dit klopten de aantallen hieronder alleen zolang niemand de secties
+  // hierboven aanraakte.
+  await db.exec(`delete from sign_offs where enrollment_id = '${samEnrollment}'`);
+  await as(wim, () =>
+    db.query(`select set_sign_off_status($1, $2, 'gehaald', null)`, [samEnrollment, eis1]));
+  await as(wim, () =>
+    db.query(`select set_sign_off_status($1, $2, 'behandeld', null)`, [samEnrollment, eis2]));
+
+  const groepStand = await as(wim, async () =>
+    (await db.query('select * from group_progress($1)', [jwf])).rows);
+  check('een instructeur ziet de voortgang van de hele groep', groepStand.length >= 2,
+    `${groepStand.length} regels`);
+
+  const samStand = groepStand.find((r) => r.enrollment_id === samEnrollment);
+  check('Sams inschrijving staat erin', Boolean(samStand));
+  check('alleen gehaald telt mee in de voortgang',
+    samStand && Number(samStand.praktijk_done) === 1,
+    samStand ? `praktijk_done = ${samStand.praktijk_done}` : 'geen regel');
+  check('behandeld wordt apart geteld en niet meegerekend',
+    samStand && Number(samStand.onderweg) === 1,
+    samStand ? `onderweg = ${samStand.onderweg}` : 'geen regel');
+  check('er valt nog iets te doen',
+    samStand && Number(samStand.praktijk_total) > Number(samStand.praktijk_done),
+    samStand ? `${samStand.praktijk_done}/${samStand.praktijk_total}` : 'geen regel');
+  check('de datum van de laatste aftekening staat erbij',
+    samStand && samStand.laatst_afgetekend !== null);
+
+  // Het hele punt van beide functies: ze geven de stand van iedereen, en dat
+  // is precies wat een lid niet van zijn medevaarders hoort te zien.
+  const standVoorLid = await refused(sam, 'select * from group_progress($1)', [jwf]);
+  check('een lid komt er niet bij', standVoorLid !== null, 'het lukte wel');
+  const standVoorVreemde = await refused(ander, 'select * from group_progress($1)', [jwf]);
+  check('iemand van buiten de groep ook niet', standVoorVreemde !== null, 'het lukte wel');
+
+  const eisRaster = await as(wim, async () =>
+    (await db.query('select * from diploma_eis_stand($1, $2)', [jwf, roeien12])).rows);
+  const eisenVanRoeien = (await one(
+    `select count(*)::int as n from requirements
+       where diploma_id = '${roeien12}' and parent_id is null`)).n;
+  const ingeschrevenOp = (await one(
+    `select count(*)::int as n from enrollments
+       where group_id = '${jwf}' and diploma_id = '${roeien12}'`)).n;
+  check('het raster is volledig: elke eis maal elk ingeschreven lid',
+    eisRaster.length === eisenVanRoeien * ingeschrevenOp,
+    `${eisRaster.length} regels, verwacht ${eisenVanRoeien} x ${ingeschrevenOp}`);
+
+  // Niet behandeld hoort een regel te zijn met status null, geen ontbrekende
+  // regel. Anders kan de pagina "nog niet behandeld" niet onderscheiden van
+  // "doet dit diploma niet", en juist die eerste groep is waar het om gaat.
+  check('nog niet behandelde eisen staan erin met status null',
+    eisRaster.some((r) => r.status === null), 'geen enkele');
+  const rasterGehaald = eisRaster.filter((r) => r.status === 'gehaald').length;
+  check('de gehaalde eis staat er met zijn stand', rasterGehaald === 1, `${rasterGehaald}`);
+  const rasterOnderweg = eisRaster.filter((r) => r.status === 'behandeld').length;
+  check('de behandelde eis ook', rasterOnderweg === 1, `${rasterOnderweg}`);
+
+  const rasterVoorLid = await refused(sam,
+    'select * from diploma_eis_stand($1, $2)', [jwf, roeien12]);
+  check('een lid komt ook niet bij het raster', rasterVoorLid !== null, 'het lukte wel');
 
   section('Bakken');
 

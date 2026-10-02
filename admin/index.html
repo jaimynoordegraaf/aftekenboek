@@ -76,7 +76,20 @@
     height: 8px; border-radius: 4px; background: var(--chip); overflow: hidden;
     margin-top: 10px;
   }
+  .voortgang { display: flex; }
   .voortgang > i { display: block; height: 100%; background: var(--accent); transition: width .2s; }
+  .voortgang > i.onderweg { background: var(--warn); }
+  /* Een naam in het raster. Kleiner dan een chip: er staan er twaalf op een rij. */
+  .naam {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    background: var(--chip); font-size: 12px; margin: 2px 3px 0 0;
+  }
+  .naam.onderweg { background: var(--warn); color: var(--card); font-weight: 600; }
+  .eisrij { padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .eisrij:last-child { border-bottom: none; }
+  .eisrij .kop { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+  .teller { font-size: 13px; font-weight: 600; white-space: nowrap; }
+  .teller.klaar { color: var(--good); }
   .keuzeregel {
     display: flex; justify-content: space-between; gap: 12px; width: 100%;
     text-align: left; font: inherit; cursor: pointer; padding: 10px 12px;
@@ -165,6 +178,7 @@
     <h1>Vinkje — beheer</h1>
     <nav>
       <button data-tab="leden" aria-current="true">Leden</button>
+      <button data-tab="voortgang">Voortgang</button>
       <button data-tab="codes">Codes</button>
       <button data-tab="speltakken">Speltakken</button>
       <button data-tab="bakken">Bakken</button>
@@ -567,6 +581,7 @@ function render() {
   // De schermen vullen zich asynchroon, dus de scrolstand komt even later terug.
   setTimeout(() => window.scrollTo({ top: scrolStand }), 120);
   if (tab === 'leden') renderLeden(view);
+  else if (tab === 'voortgang') renderVoortgang(view);
   else if (tab === 'codes') renderCodes(view);
   else if (tab === 'speltakken') renderSpeltakken(view);
   else if (tab === 'bakken') renderBakken(view);
@@ -710,6 +725,225 @@ async function renderLeden(view) {
 }
 
 // ---- Codes
+
+// ---- Voortgang
+//
+// Twee vragen die niet hetzelfde zijn. "Hoe ver is iedereen" is een lijst per
+// lid — daar zoek je iemand in op. "Wat gaan we vanmiddag doen" is het overzicht
+// per eis, met de eis die de meeste mensen nog missen bovenaan. Dat tweede is
+// waar je naar kijkt als je op de steiger staat, en daarom staat het eronder in
+// plaats van in een eigen tabblad.
+//
+// De app heeft hier niets aan: daar kijkt iemand naar zijn eigen vorderingen.
+// Dit is het beeld dat een instructeur nodig heeft en een lid niet mag zien.
+// group_progress en diploma_eis_stand weigeren dan ook iedereen die geen
+// instructeur of beheerder is — met een foutmelding, niet met een lege lijst,
+// want een lege lijst lijkt op een groep waar niets gebeurt.
+
+let voortgangDiploma = null;
+
+function datumKort(d) {
+  if (!d) return null;
+  return new Date(d).toLocaleDateString('nl-NL', {
+    day: 'numeric', month: 'short', year: 'numeric',
+  });
+}
+
+/** Gehaald in de accentkleur, behandeld in oranje erachter, de rest leeg. */
+function voortgangBalk(gehaald, onderweg, totaal) {
+  const deel = (n) => (totaal > 0 ? (n / totaal) * 100 : 0);
+  return el('div', { class: 'voortgang' },
+    el('i', { style: 'width:' + deel(gehaald).toFixed(1) + '%' }),
+    el('i', { class: 'onderweg', style: 'width:' + deel(onderweg).toFixed(1) + '%' }));
+}
+
+async function renderVoortgang(view) {
+  view.append(el('h2', {}, 'Voortgang'));
+  view.append(el('p', { class: 'dim' },
+    'Alleen gehaalde eisen tellen mee. Oranje is behandeld maar nog niet gehaald: ' +
+    'daar is iemand mee bezig, dus daar valt de eerste winst te halen.'));
+
+  const [stand, leden] = await Promise.all([
+    run(async () => check(await db.rpc('group_progress', { p_group: group.id }))),
+    run(async () => check(await db.rpc('group_members', { p_group: group.id }))),
+  ]);
+
+  view.append(perLidBlok(stand, leden));
+  view.append(await perEisBlok(stand));
+}
+
+function perLidBlok(stand, leden) {
+  const doos = el('div', { class: 'card' });
+  doos.append(el('h3', {}, 'Per lid'));
+
+  const perLid = new Map();
+  for (const r of stand) {
+    if (!perLid.has(r.profile_id)) {
+      perLid.set(r.profile_id, { naam: r.full_name, regels: [] });
+    }
+    perLid.get(r.profile_id).regels.push(r);
+  }
+
+  const tel = (regels, veld) => regels.reduce((a, r) => a + Number(r[veld]), 0);
+
+  for (const [pid, lid] of perLid) {
+    const totaal = tel(lid.regels, 'praktijk_total') + tel(lid.regels, 'theorie_total');
+    const gehaald = tel(lid.regels, 'praktijk_done') + tel(lid.regels, 'theorie_done');
+    const onderweg = tel(lid.regels, 'onderweg');
+    const open = totaal - gehaald;
+
+    const paneel = klapper('voortgang:' + pid, el('span', { class: 'row spread' },
+      el('b', {}, lid.naam),
+      el('span', { class: 'teller' + (open === 0 && totaal > 0 ? ' klaar' : '') },
+        totaal === 0 ? 'nog geen eisen'
+          : open === 0 ? 'alles gehaald' : open + ' te gaan')));
+    paneel.append(voortgangBalk(gehaald, onderweg, totaal));
+    for (const r of lid.regels) paneel.append(diplomaRegel(r));
+    doos.append(paneel);
+  }
+
+  // Wie nergens voor staat ingeschreven komt niet uit group_progress: die heeft
+  // geen inschrijving, dus ook geen regel. Juist die wil je zien, want voor hem
+  // is nog niets in gang gezet.
+  const zonder = leden.filter(
+    (l) => !perLid.has(l.profile_id)
+      && Number(l.in_progress) === 0 && Number(l.awarded) === 0,
+  );
+  if (zonder.length > 0) {
+    const rij = el('div', { class: 'eisrij' });
+    rij.append(el('div', { class: 'kop' },
+      el('b', {}, 'Nog geen opleiding'),
+      el('span', { class: 'teller' }, String(zonder.length))));
+    rij.append(el('p', { class: 'dim' },
+      'Voor deze leden is nog niets in gang gezet. Inschrijven doe je in de app, ' +
+      'bij de vaarder zelf.'));
+    const namen = el('div', {});
+    for (const l of zonder) namen.append(el('span', { class: 'naam' }, l.full_name));
+    rij.append(namen);
+    doos.append(rij);
+  }
+
+  if (perLid.size === 0 && zonder.length === 0) {
+    doos.append(el('p', { class: 'dim' }, 'Nog geen leden in de groep.'));
+  }
+  return doos;
+}
+
+function diplomaRegel(r) {
+  const pd = Number(r.praktijk_done), pt = Number(r.praktijk_total);
+  const td = Number(r.theorie_done), tt = Number(r.theorie_total);
+  const onderweg = Number(r.onderweg);
+  const open = pt - pd + (tt - td);
+
+  const rij = el('div', { class: 'eisrij' });
+  rij.append(el('div', { class: 'kop' },
+    el('span', {}, r.diploma_name,
+      el('span', { class: 'dim' }, ' ' + r.discipline_name)),
+    el('span', { class: 'teller' + (open === 0 && pt + tt > 0 ? ' klaar' : '') },
+      r.awarded_on ? 'uitgereikt ' + datumKort(r.awarded_on)
+        // Een eigen lijst begint zonder eisen. Dan is er niets gehaald en ook
+        // niets te gaan; "alles gehaald" zou dat als een prestatie tonen.
+        : pt + tt === 0 ? 'nog geen eisen'
+          : open === 0 ? 'alles gehaald' : open + ' te gaan')));
+
+  const losse = [
+    'praktijk ' + pd + '/' + pt,
+    'theorie ' + td + '/' + tt,
+    onderweg > 0 ? onderweg + ' onderweg' : null,
+    r.laatst_afgetekend ? 'laatst ' + datumKort(r.laatst_afgetekend) : 'nog niets afgetekend',
+    r.theory_passed_on ? 'theorie-examen ' + datumKort(r.theory_passed_on) : null,
+  ].filter(Boolean);
+  rij.append(el('p', { class: 'dim' }, losse.join(' · ')));
+  rij.append(voortgangBalk(pd + td, onderweg, pt + tt));
+  return rij;
+}
+
+async function perEisBlok(stand) {
+  const doos = el('div', { class: 'card' });
+  doos.append(el('h3', {}, 'Wie moet wat nog doen'));
+
+  // Alleen diploma's waar iemand voor staat ingeschreven. De hele catalogus
+  // aanbieden geeft vijftien knoppen waarvan er twee ergens over gaan.
+  const dips = [];
+  const gezien = new Set();
+  for (const r of stand) {
+    if (gezien.has(r.diploma_id)) continue;
+    gezien.add(r.diploma_id);
+    dips.push({ id: r.diploma_id, naam: r.diploma_name });
+  }
+
+  if (dips.length === 0) {
+    doos.append(el('p', { class: 'dim' },
+      'Zodra er iemand voor een diploma staat ingeschreven, staat het hier.'));
+    return doos;
+  }
+  if (!dips.some((d) => d.id === voortgangDiploma)) voortgangDiploma = dips[0].id;
+
+  doos.append(el('p', { class: 'dim' },
+    'Per eis, met de eis die de meeste mensen nog missen bovenaan — daar levert ' +
+    'een middag op het water het meeste op. De namen zijn wie hem nog niet gehaald ' +
+    'heeft; oranje is wie er al mee bezig is.'));
+
+  const kiezer = el('div', { class: 'row', style: 'flex-wrap:wrap' });
+  for (const d of dips) {
+    kiezer.append(chip(d.naam, d.id === voortgangDiploma, () => {
+      voortgangDiploma = d.id;
+      render();
+    }));
+  }
+  doos.append(kiezer);
+
+  const rijen = await run(async () => check(await db.rpc('diploma_eis_stand', {
+    p_group: group.id, p_diploma: voortgangDiploma,
+  })));
+
+  const perEis = new Map();
+  for (const r of rijen) {
+    if (!perEis.has(r.requirement_id)) {
+      perEis.set(r.requirement_id, {
+        kind: r.kind, positie: r.positie, title: r.title, leden: [],
+      });
+    }
+    perEis.get(r.requirement_id).leden.push(r);
+  }
+
+  const lijst = [...perEis.values()].map((e) => ({
+    ...e,
+    klaar: e.leden.filter((l) => l.status === 'gehaald'),
+    open: e.leden.filter((l) => l.status !== 'gehaald'),
+  }));
+
+  // De grootste gaten bovenaan. Bij een gelijke stand de volgorde uit het
+  // handboek, zodat twee eisen niet elke keer van plek wisselen.
+  lijst.sort((a, b) => b.open.length - a.open.length
+    || a.kind.localeCompare(b.kind)
+    || a.positie - b.positie);
+
+  for (const e of lijst) {
+    const rij = el('div', { class: 'eisrij' });
+    rij.append(el('div', { class: 'kop' },
+      el('span', {},
+        el('span', { class: 'dim' },
+          (e.kind === 'theorie' ? 'T' : 'P') + e.positie + ' '),
+        e.title),
+      el('span', { class: 'teller' + (e.open.length === 0 ? ' klaar' : '') },
+        e.open.length === 0 ? 'iedereen' : e.klaar.length + '/' + e.leden.length)));
+
+    if (e.open.length > 0) {
+      const namen = el('div', {});
+      const gesorteerd = [...e.open].sort(
+        (a, b) => a.full_name.localeCompare(b.full_name, 'nl'));
+      for (const l of gesorteerd) {
+        namen.append(el('span', {
+          class: 'naam' + (l.status === 'behandeld' ? ' onderweg' : ''),
+        }, l.full_name));
+      }
+      rij.append(namen);
+    }
+    doos.append(rij);
+  }
+  return doos;
+}
 
 async function renderCodes(view) {
   view.append(el('h2', {}, 'Uitnodigingscodes'));
